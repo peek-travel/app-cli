@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
 import { basename, dirname, join } from "node:path";
 import { execa } from "execa";
 import * as p from "@clack/prompts";
@@ -6,7 +7,32 @@ import { CLIError } from "../errors.js";
 import { getInstallationsApiUrl, isRegistryOverridden } from "./registry.js";
 import { writeEnvLocal } from "./scaffold.js";
 import { createTestApp, syncApp } from "./sync.js";
-import { startTunnel } from "./tunnel.js";
+import { startTunnel, warmTunnel } from "./tunnel.js";
+
+// Is a port bindable right now? Bind with no host so it covers every interface the dev
+// server might use — a partial match (e.g. something on 127.0.0.1 only) still counts as taken.
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = createNetServer();
+    srv.once("error", () => resolve(false));
+    srv.once("listening", () => srv.close(() => resolve(true)));
+    srv.listen(port);
+  });
+}
+
+// Walk up from the requested port until one is free. We must pick the port OURSELVES rather
+// than letting the dev server auto-increment: the tunnel and the PORT env have to agree, and a
+// server that quietly moves to 3001 while the tunnel points at 3000 is exactly the hard-to-
+// recover-from failure this avoids.
+async function findAvailablePort(start: number, attempts = 20): Promise<number> {
+  for (let port = start; port < start + attempts; port++) {
+    if (await isPortFree(port)) return port;
+  }
+  throw new CLIError(
+    `No free port found in ${start}–${start + attempts - 1}.`,
+    "Free up a port or pass --port with a different starting value.",
+  );
+}
 
 // The dev loop targets a TEST app (app-dev.json), never the source app.json. The source is
 // synced only as an unpublished draft; the test app is what gets a base_url, gets published,
@@ -60,9 +86,15 @@ export interface ServeOptions {
 // sync, because the registry rejects a publish whose base_url is null (relative extendable
 // URLs require it). Callers must have already ensured login + confirmed the registry.
 export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
+  // Pin a free port before anything downstream (tunnel, PORT env, base_url) is derived from it.
+  const port = await findAvailablePort(opts.port);
+  if (port !== opts.port) {
+    p.log.warn(`Port ${opts.port} is in use — using :${port} instead.`);
+  }
+
   const spinner = p.spinner();
   spinner.start("Starting Cloudflare tunnel");
-  const tunnel = await startTunnel(opts.port);
+  const tunnel = await startTunnel(port);
   spinner.stop(`Tunnel up: ${tunnel.url}`);
 
   const devFile = devFileFor(opts.appFile);
@@ -140,7 +172,12 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
     // Tunnel URL is plumbing — demote it to a step so the install link can be the last,
     // loudest thing before we hand off to the (noisy) dev server banner.
     p.log.step(`Public URL: ${tunnel.url}`);
-    p.log.step(`Starting dev server on :${opts.port} (ctrl-c to stop)`);
+    p.log.step(`Starting dev server on :${port} (ctrl-c to stop)`);
+
+    // A fresh quick tunnel is cold — the first request pays edge routing + TLS setup, which
+    // reads as a ~5s "nothing's happening" stall on the developer's first navigation. Prime
+    // that path in the background now so the edge (and, once it boots, the origin) is warm.
+    warmTunnel(tunnel.url);
 
     // The registry writes install URLs back into app-dev.json under data.app.app_version.app_urls
     // during sync. Print them LAST — the final Peek output before the app boots — so this
@@ -154,7 +191,7 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
     await execa(opts.pm, ["run", "dev"], {
       cwd: opts.cwd,
       stdio: "inherit",
-      env: { ...process.env, PORT: String(opts.port) },
+      env: { ...process.env, PORT: String(port) },
     });
   } finally {
     tunnel.stop();

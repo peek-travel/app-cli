@@ -1,22 +1,56 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { configDir, getRegistryUrl } from "./registry.js";
+import { configDir, DEFAULT_REGISTRY_URL, getRegistryUrl } from "./registry.js";
 
 export interface TokenSet {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
-  // Registry the token was issued by. A stored token is only valid against that same
-  // registry — this stops a token minted by production from being sent to a registry
-  // the developer later points the CLI at with `peek set-env`.
+  // Registry the token was issued by. Also the key it's stored under — kept in the record
+  // for clarity and to migrate older single-token session files.
   registryUrl?: string;
 }
+
+// session.json holds one TokenSet PER registry, keyed by registry URL. Credentials are scoped
+// to their env: pointing the CLI at another registry (`peek set-env`) never sends this env's
+// token there, and switching back doesn't require logging in again.
+type SessionStore = Record<string, TokenSet>;
 
 // Treat tokens as expired slightly early so one that lapses mid-request doesn't 401.
 const EXPIRY_SKEW_MS = 30_000;
 
 function sessionPath(): string {
   return join(configDir(), "session.json");
+}
+
+function readStore(): SessionStore {
+  const path = sessionPath();
+  if (!existsSync(path)) return {};
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return {};
+  }
+  if (!raw || typeof raw !== "object") return {};
+
+  // Migrate the legacy shape: a single flat TokenSet with accessToken at top level. Key it by
+  // its own registryUrl, falling back to the default (prod) registry, where such tokens came from.
+  if (typeof (raw as TokenSet).accessToken === "string") {
+    const legacy = raw as TokenSet;
+    return { [legacy.registryUrl ?? DEFAULT_REGISTRY_URL]: legacy };
+  }
+
+  return raw as SessionStore;
+}
+
+function writeStore(store: SessionStore): void {
+  mkdirSync(configDir(), { recursive: true, mode: 0o700 });
+  const path = sessionPath();
+  // mode applies atomically on create; the chmod covers a file left by older versions.
+  writeFileSync(path, JSON.stringify(store, null, 2), { encoding: "utf8", mode: 0o600 });
+  chmodSync(path, 0o600);
 }
 
 // Storage precedence: PEEK_TOKEN env (CI/scripting, never persisted) > file fallback.
@@ -26,19 +60,8 @@ export function getToken(): TokenSet | undefined {
     return { accessToken: process.env.PEEK_TOKEN };
   }
 
-  const path = sessionPath();
-  if (!existsSync(path)) return undefined;
-
-  let parsed: TokenSet;
-  try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return undefined;
-  }
-  if (!parsed.accessToken) return undefined;
-
-  // Token is scoped to the registry that issued it.
-  if (parsed.registryUrl && parsed.registryUrl !== getRegistryUrl()) return undefined;
+  const parsed = readStore()[getRegistryUrl()];
+  if (!parsed?.accessToken) return undefined;
 
   // Expired means "not signed in", so callers route back through login instead of
   // surfacing a raw 401 from the registry. Refresh-token flow is a follow-up.
@@ -48,15 +71,21 @@ export function getToken(): TokenSet | undefined {
 }
 
 export function saveTokens(tokens: TokenSet): void {
-  mkdirSync(configDir(), { recursive: true, mode: 0o700 });
-  const path = sessionPath();
-  // mode applies atomically on create; the chmod covers a file left by older versions.
-  writeFileSync(path, JSON.stringify(tokens, null, 2), { encoding: "utf8", mode: 0o600 });
-  chmodSync(path, 0o600);
+  const store = readStore();
+  store[tokens.registryUrl ?? getRegistryUrl()] = tokens;
+  writeStore(store);
 }
 
+// Log out of the CURRENT registry only, leaving other envs' credentials intact. Remove the
+// file entirely once nothing's left so a logged-out state leaves no stale artifact.
 export function clear(): void {
-  rmSync(sessionPath(), { force: true });
+  const store = readStore();
+  delete store[getRegistryUrl()];
+  if (Object.keys(store).length === 0) {
+    rmSync(sessionPath(), { force: true });
+  } else {
+    writeStore(store);
+  }
 }
 
 export function isLoggedIn(): boolean {
