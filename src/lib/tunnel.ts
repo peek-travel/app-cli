@@ -72,3 +72,16 @@ export async function startTunnel(port: number): Promise<Tunnel> {
     );
   });
 }
+
+// Fire a few throwaway requests at the tunnel URL to warm Cloudflare's edge before the
+// developer navigates. Early hits (origin not up yet) 502 but still establish edge routing +
+// TLS; the later hit lands after the dev server boots and warms the origin path too. Fully
+// background — errors are swallowed and the timers are unref'd so they never hold the process.
+export function warmTunnel(url: string): void {
+  const hit = () => {
+    fetch(url, { method: "GET" }).catch(() => {});
+  };
+  for (const delay of [0, 1500, 4000]) {
+    setTimeout(hit, delay).unref();
+  }
+}

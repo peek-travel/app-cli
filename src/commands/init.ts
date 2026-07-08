@@ -21,7 +21,14 @@ function slugify(name: string): string {
   const slug = name
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "-")
+    // Fold accents to their base letter first ("café" → "cafe") rather than dropping them.
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Strip non-standard chars outright (so "Peek's App!" → "peeks-app", not "peek-s-app-").
+    // Only whitespace is a word separator and becomes a dash.
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
 
   return SLUG_RE.test(slug) ? slug : `app-${slug}`.replace(/-+$/, "");
