@@ -1,0 +1,66 @@
+{
+  "name": "@peektravel/app-cli",
+  "version": "0.1.0",
+  "description": "CLI for scaffolding, developing, and publishing Peek apps",
+  "license": "MIT",
+  "author": "Peek Travel, Inc.",
+  "keywords": [
+    "peek",
+    "cli",
+    "scaffold",
+    "apps"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "bin": {
+    "peek": "./bin/run.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "oclif": {
+    "bin": "peek",
+    "dirname": "peek",
+    "commands": "./dist/commands",
+    "plugins": [
+      "@oclif/plugin-help",
+      "@oclif/plugin-warn-if-update-available"
+    ],
+    "topicSeparator": " ",
+    "warn-if-update-available": {
+      "timeoutInDays": 1,
+      "message": "<%= config.name %> update available: <%= chalk.greenBright(latest) %> (current <%= chalk.dim(config.version) %>). Run <%= chalk.cyan('npm i -g ' + config.pjson.name) %> to update."
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "./bin/dev.js",
+    "test": "vitest run",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "@oclif/core": "^4.2.0",
+    "@oclif/plugin-help": "^6.2.53",
+    "@oclif/plugin-warn-if-update-available": "^3.1.68",
+    "cloudflared": "^0.7.1",
+    "execa": "^9.5.2",
+    "giget": "^1.2.5",
+    "open": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "oclif": "^4.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}
