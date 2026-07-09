@@ -174,10 +174,12 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
     p.log.step(`Public URL: ${tunnel.url}`);
     p.log.step(`Starting dev server on :${port} (ctrl-c to stop)`);
 
-    // A fresh quick tunnel is cold — the first request pays edge routing + TLS setup, which
-    // reads as a ~5s "nothing's happening" stall on the developer's first navigation. Prime
-    // that path in the background now so the edge (and, once it boots, the origin) is warm.
-    warmTunnel(tunnel.url);
+    // A fresh quick tunnel is cold — the first request pays edge routing + TLS + the
+    // edge→origin connection, which reads as a ~5s "nothing's happening" stall on the
+    // developer's first navigation. Prime that path in the background: warmTunnel waits for
+    // the dev server (started below) to bind the port, then pulls real requests through so
+    // both edge and origin are warm before anyone navigates.
+    warmTunnel(tunnel.url, port);
 
     // The registry writes install URLs back into app-dev.json under data.app.app_version.app_urls
     // during sync. Print them LAST — the final Peek output before the app boots — so this

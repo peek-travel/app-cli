@@ -73,15 +73,40 @@ export async function startTunnel(port: number): Promise<Tunnel> {
   });
 }
 
-// Fire a few throwaway requests at the tunnel URL to warm Cloudflare's edge before the
-// developer navigates. Early hits (origin not up yet) 502 but still establish edge routing +
-// TLS; the later hit lands after the dev server boots and warms the origin path too. Fully
-// background — errors are swallowed and the timers are unref'd so they never hold the process.
-export function warmTunnel(url: string): void {
-  const hit = () => {
-    fetch(url, { method: "GET" }).catch(() => {});
+// Warm Cloudflare's edge AND the origin path before the developer navigates. A fresh quick
+// tunnel is cold: the first real request pays edge routing + TLS *and* the edge→origin
+// connection, which reads as a ~5s stall. Fixed delays don't work — they race the dev server
+// boot, so the warm hits land before the origin binds the port, 502, and warm nothing that
+// lasts. Instead we poll the local origin until it actually accepts a connection, then pull a
+// few real requests through the public URL so the full edge→origin path is hot. Fully
+// background: errors are swallowed and every timer is unref'd so it never holds the process.
+const ORIGIN_WAIT_MS = 60_000;
+const POLL_INTERVAL_MS = 500;
+
+export function warmTunnel(url: string, port: number): void {
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms).unref();
+    });
+
+  // Any response — even 404/500 — means the port is bound and serving; that's all we need.
+  const originUp = () =>
+    fetch(`http://localhost:${port}`, { method: "GET" }).then(
+      () => true,
+      () => false,
+    );
+
+  const run = async () => {
+    const deadline = Date.now() + ORIGIN_WAIT_MS;
+    while (Date.now() < deadline) {
+      if (await originUp()) break;
+      await sleep(POLL_INTERVAL_MS);
+    }
+    // Origin listening: pull real requests edge→origin to warm the full path.
+    for (let i = 0; i < 3; i++) {
+      await fetch(url, { method: "GET" }).catch(() => {});
+    }
   };
-  for (const delay of [0, 1500, 4000]) {
-    setTimeout(hit, delay).unref();
-  }
+
+  run().catch(() => {});
 }
