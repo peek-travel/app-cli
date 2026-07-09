@@ -4,7 +4,6 @@ import { basename, dirname, join } from "node:path";
 import { execa } from "execa";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
-import { runArgs, type PackageManager } from "./pm.js";
 import { getInstallationsApiUrl, getRegistryUrl, isRegistryOverridden } from "./registry.js";
 import { writeEnvLocal } from "./scaffold.js";
 import { createTestApp, syncApp } from "./sync.js";
@@ -213,7 +212,7 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
       ];
       p.note(lines.join("\n"), "Next steps");
     }
-    await execa(opts.pm, runArgs(opts.pm as PackageManager, "dev"), {
+    await execa(opts.pm, ["run", "dev"], {
       cwd: opts.cwd,
       stdio: "inherit",
       env: { ...process.env, PORT: String(port) },

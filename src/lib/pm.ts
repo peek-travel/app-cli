@@ -8,10 +8,10 @@ export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 const KNOWN: PackageManager[] = ["npm", "pnpm", "yarn", "bun"];
 
 // Minimum major version a package manager must be to install the starter template.
-// pnpm 10 moved onlyBuiltDependencies/ignoredBuiltDependencies into pnpm-workspace.yaml
-// and stopped requiring a `packages:` field there. The template ships exactly such a
-// file, so pnpm 9 chokes with "packages field missing or empty". Guard it up front
-// rather than letting the raw pnpm error confuse the developer.
+// The template targets pnpm 11: its pnpm-workspace.yaml uses the `allowBuilds` build
+// policy (pnpm 10.16+) and pnpm 11 also raised the Node floor. Older pnpm fails with
+// confusing errors ("packages field missing or empty" on 9, an ignored-builds prompt
+// on unpinned 10), so guard up front with an actionable message instead.
 const MIN_MAJOR: Partial<Record<PackageManager, number>> = { pnpm: 11 };
 
 const LOCKFILES: Record<string, PackageManager> = {
@@ -72,34 +72,7 @@ export function detectPackageManager(
 }
 
 export function installArgs(pm: PackageManager): string[] {
-  if (pm === "yarn") return [];
-  if (pm === "pnpm") {
-    // pnpm 11 turned ignored build scripts into a hard install failure
-    // (ERR_PNPM_IGNORED_BUILDS, non-zero exit) even when the project lists them under
-    // ignoredBuiltDependencies. The starter template intentionally ignores sharp /
-    // unrs-resolver — they ship prebuilt binaries and don't need to build — so demote
-    // that back to a warning and keep install non-interactive across pnpm 10 and 11.
-    return ["install", "--config.strict-dep-builds=false"];
-  }
-  return ["install"];
-}
-
-// Args to run a package.json script (e.g. the dev server). pnpm 11 runs a deps-status
-// check before a script (verify-deps-before-run) that fires an implicit install; with
-// the template's ignored build scripts that check fails the same way install does
-// (ERR_PNPM_IGNORED_BUILDS). We just installed deps in this same flow, so skip the
-// pre-run verification and keep strict builds demoted. Other managers take a bare
-// `run <script>`.
-export function runArgs(pm: PackageManager, script: string): string[] {
-  if (pm === "pnpm") {
-    return [
-      "run",
-      "--config.strict-dep-builds=false",
-      "--config.verify-deps-before-run=false",
-      script,
-    ];
-  }
-  return ["run", script];
+  return pm === "yarn" ? [] : ["install"];
 }
 
 // Parse the major version out of a `pm --version` string ("10.25.0" -> 10). Returns
