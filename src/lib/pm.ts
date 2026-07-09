@@ -1,10 +1,18 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { CLIError } from "../errors.js";
 
 export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
 const KNOWN: PackageManager[] = ["npm", "pnpm", "yarn", "bun"];
+
+// Minimum major version a package manager must be to install the starter template.
+// The template's pnpm-workspace.yaml uses the `allowBuilds` build policy, which needs
+// pnpm 10.16+. pnpm 9 can't read that file at all ("packages field missing or empty"),
+// so guard up front with an actionable message rather than surface the raw pnpm error.
+// pnpm 10 and 11 both install cleanly, so 10 is the floor.
+const MIN_MAJOR: Partial<Record<PackageManager, number>> = { pnpm: 10 };
 
 const LOCKFILES: Record<string, PackageManager> = {
   "pnpm-lock.yaml": "pnpm",
@@ -18,7 +26,9 @@ const LOCKFILES: Record<string, PackageManager> = {
 // plain "npx" sets npm). Undefined if not launched by a package manager.
 function invokingPm(): PackageManager | undefined {
   const name = process.env.npm_config_user_agent?.split("/")[0];
-  return KNOWN.includes(name as PackageManager) ? (name as PackageManager) : undefined;
+  return KNOWN.includes(name as PackageManager)
+    ? (name as PackageManager)
+    : undefined;
 }
 
 function isInstalled(pm: PackageManager): boolean {
@@ -29,7 +39,10 @@ function isInstalled(pm: PackageManager): boolean {
   }
 }
 
-export function detectPackageManager(override?: string, targetDir?: string): PackageManager {
+export function detectPackageManager(
+  override?: string,
+  targetDir?: string,
+): PackageManager {
   if (override && override !== "auto") {
     if (!KNOWN.includes(override as PackageManager)) {
       throw new Error(`Unknown package manager: ${override}`);
@@ -60,4 +73,44 @@ export function detectPackageManager(override?: string, targetDir?: string): Pac
 
 export function installArgs(pm: PackageManager): string[] {
   return pm === "yarn" ? [] : ["install"];
+}
+
+// Parse the major version out of a `pm --version` string ("10.25.0" -> 10). Returns
+// undefined for anything unparseable so callers can treat "unknown" as "don't block".
+export function parseMajor(version: string): number | undefined {
+  const major = Number.parseInt(version.trim().split(".")[0], 10);
+  return Number.isNaN(major) ? undefined : major;
+}
+
+// Pure version-policy check: given a package manager and the major version installed
+// (undefined if it couldn't be determined), return a CLIError to throw or undefined to
+// proceed. Split out from the spawn so it's deterministically testable.
+export function unsupportedVersionError(
+  pm: PackageManager,
+  major: number | undefined,
+): CLIError | undefined {
+  const min = MIN_MAJOR[pm];
+  if (min === undefined || major === undefined || major >= min)
+    return undefined;
+
+  return new CLIError(
+    `${pm} ${major} is too old — the starter template needs ${pm} ${min} or newer.`,
+    `Upgrade (e.g. "npm install -g ${pm}@latest" or "corepack use ${pm}@${min}"), ` +
+      `then re-run. Or pick another package manager: "peek init --pm npm".`,
+  );
+}
+
+function installedMajor(pm: PackageManager): number | undefined {
+  const result = spawnSync(pm, ["--version"], { encoding: "utf8" });
+  if (result.status !== 0 || typeof result.stdout !== "string")
+    return undefined;
+  return parseMajor(result.stdout);
+}
+
+// Throw a clear, actionable CLIError when the selected package manager is too old for
+// the template. A no-op for package managers without a minimum, or when the version
+// can't be read (don't block on an unknown).
+export function assertSupportedVersion(pm: PackageManager): void {
+  const error = unsupportedVersionError(pm, installedMajor(pm));
+  if (error) throw error;
 }

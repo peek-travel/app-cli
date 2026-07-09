@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { execa } from "execa";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
-import { getInstallationsApiUrl, isRegistryOverridden } from "./registry.js";
+import { getInstallationsApiUrl, getRegistryUrl, isRegistryOverridden } from "./registry.js";
 import { writeEnvLocal } from "./scaffold.js";
 import { createTestApp, syncApp } from "./sync.js";
 import { startTunnel, warmTunnel } from "./tunnel.js";
@@ -186,9 +186,31 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
     // call to action isn't buried under the dev server's own output.
     const appUrls = readAppJson(workFile).data?.app?.app_version?.app_urls;
     if (appUrls && Object.keys(appUrls).length > 0) {
-      const lines = Object.entries(appUrls).map(([label, url]) => `${label}: ${url}`);
-      lines.push("", "Open a link to install the app — it loads from this dev server.");
-      p.note(lines.join("\n"), "Install your app");
+      // Keep the MCP url on the SAME registry base the developer is using — default or an
+      // override — so an override'd session doesn't paste a prod MCP endpoint into their config.
+      const mcpUrl = `${getRegistryUrl().replace(/\/+$/, "")}/mcp`;
+
+      const lines = [
+        "▸ Open your app",
+        "",
+        ...Object.entries(appUrls).map(([label, url]) => `  ${label}  ${url}`),
+        "",
+        "  Open a link above to install the app — it loads live from this dev server.",
+        "",
+        "▸ Build it with AI",
+        "",
+        "  This project ships with Claude skills ready to go. Open it in your AI",
+        "  assistant and just describe what you want — it knows how to build here.",
+        "",
+        "  Wire up the Peek app MCP so your assistant can talk to the registry —",
+        "  add this to your MCP config:",
+        "",
+        '    "peek-app-mcp": {',
+        `      "url": "${mcpUrl}",`,
+        '      "oauth": { "client_id": "peek-mcp" }',
+        "    }",
+      ];
+      p.note(lines.join("\n"), "Next steps");
     }
     await execa(opts.pm, ["run", "dev"], {
       cwd: opts.cwd,

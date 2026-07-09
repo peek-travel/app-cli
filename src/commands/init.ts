@@ -4,7 +4,7 @@ import { Args, Command, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
-import { detectPackageManager, installArgs } from "../lib/pm.js";
+import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import {
@@ -108,6 +108,11 @@ export default class Init extends Command {
     await fetchTemplate(templateSource, targetDir);
     fetchSpinner.stop("Template fetched");
 
+    // Move into the freshly-cloned app dir so the rest of the flow (install, dev server,
+    // sync) runs from inside it. targetDir stays absolute, so callers that already pass it
+    // explicitly are unaffected — this just makes the process's cwd match the app.
+    process.chdir(targetDir);
+
     await substituteTemplateVars(targetDir, {
       APP_NAME: appName,
       APP_SLUG: slug,
@@ -118,6 +123,7 @@ export default class Init extends Command {
     const pm = detectPackageManager(flags.pm, targetDir);
 
     if (!flags["no-install"]) {
+      assertSupportedVersion(pm);
       p.log.step(`Installing dependencies with ${pm}`);
       await installDependencies(pm, installArgs(pm), targetDir);
     }
