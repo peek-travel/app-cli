@@ -8,11 +8,11 @@ export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 const KNOWN: PackageManager[] = ["npm", "pnpm", "yarn", "bun"];
 
 // Minimum major version a package manager must be to install the starter template.
-// The template targets pnpm 11: its pnpm-workspace.yaml uses the `allowBuilds` build
-// policy (pnpm 10.16+) and pnpm 11 also raised the Node floor. Older pnpm fails with
-// confusing errors ("packages field missing or empty" on 9, an ignored-builds prompt
-// on unpinned 10), so guard up front with an actionable message instead.
-const MIN_MAJOR: Partial<Record<PackageManager, number>> = { pnpm: 11 };
+// The template's pnpm-workspace.yaml uses the `allowBuilds` build policy, which needs
+// pnpm 10.16+. pnpm 9 can't read that file at all ("packages field missing or empty"),
+// so guard up front with an actionable message rather than surface the raw pnpm error.
+// pnpm 10 and 11 both install cleanly, so 10 is the floor.
+const MIN_MAJOR: Partial<Record<PackageManager, number>> = { pnpm: 10 };
 
 const LOCKFILES: Record<string, PackageManager> = {
   "pnpm-lock.yaml": "pnpm",

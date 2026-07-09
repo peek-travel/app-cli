@@ -29,17 +29,15 @@ describe("parseMajor", () => {
 
 describe("unsupportedVersionError", () => {
   it("blocks pnpm below the minimum with an actionable message", () => {
-    for (const major of [9, 10]) {
-      const error = unsupportedVersionError("pnpm", major);
-      expect(error).toBeInstanceOf(CLIError);
-      expect(error?.message).toContain(`pnpm ${major} is too old`);
-      expect(error?.suggestion).toContain("--pm npm");
-    }
+    const error = unsupportedVersionError("pnpm", 9);
+    expect(error).toBeInstanceOf(CLIError);
+    expect(error?.message).toContain("pnpm 9 is too old");
+    expect(error?.suggestion).toContain("--pm npm");
   });
 
   it("allows pnpm at or above the minimum", () => {
+    expect(unsupportedVersionError("pnpm", 10)).toBeUndefined();
     expect(unsupportedVersionError("pnpm", 11)).toBeUndefined();
-    expect(unsupportedVersionError("pnpm", 12)).toBeUndefined();
   });
 
   it("does not block package managers without a minimum", () => {
