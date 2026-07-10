@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
+import { type AppDetails, generateAppDetails, hasClaude, writeAppCopy } from "../lib/claude.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import {
@@ -52,6 +53,14 @@ export default class Init extends Command {
       description: "Starter template to use",
       default: "nextjs",
     }),
+    goal: Flags.string({
+      description:
+        "What the app should do — used to tailor the listing copy (needs the Claude CLI)",
+    }),
+    "with-claude": Flags.boolean({
+      description: "Use the Claude CLI (if installed) to generate the name, description, and listing",
+      default: false,
+    }),
     pm: Flags.string({
       description: "Package manager to use",
       options: ["auto", "npm", "pnpm", "yarn", "bun"],
@@ -93,7 +102,23 @@ export default class Init extends Command {
       "Welcome",
     );
 
-    const appName = await this.resolveAppName(args["app-name"]);
+    // Default is the classic "what's your app name?" prompt with the template's default copy.
+    // Opt in with --with-claude to go description-first: ask what the app should do, then let
+    // the Claude CLI invent the name, description, and listing copy — never prompting for a
+    // name. An explicit app-name arg always wins over both.
+    let details: AppDetails | null = null;
+    let appName: string;
+
+    if (args["app-name"]) {
+      appName = args["app-name"];
+    } else if (flags["with-claude"] && (await this.ensureClaude())) {
+      const appGoal = await this.resolveAppGoal(flags.goal);
+      details = appGoal ? await this.generateDetails(appGoal) : null;
+      appName = details?.name ?? (await this.resolveAppName(undefined));
+    } else {
+      appName = await this.resolveAppName(undefined);
+    }
+
     const slug = slugify(appName);
     const targetDir = resolve(process.cwd(), slug);
 
@@ -117,6 +142,11 @@ export default class Init extends Command {
       APP_NAME: appName,
       APP_SLUG: slug,
     });
+
+    if (details) {
+      const wrote = await writeAppCopy(join(targetDir, "app.json"), details);
+      if (wrote) p.log.step("Wrote your app description and listing (via Claude)");
+    }
 
     await gitInit(targetDir);
 
@@ -184,6 +214,49 @@ export default class Init extends Command {
     }
 
     return answer as string;
+  }
+
+  private async resolveAppGoal(provided?: string): Promise<string> {
+    if (provided !== undefined) return provided.trim();
+    // No TTY (CI, piped, scripted) → can't prompt; skip rather than block on stdin.
+    if (!process.stdin.isTTY) return "";
+
+    const answer = await p.text({
+      message: "What should your app do?",
+      placeholder: "Show recent waivers and let staff check on those bookings",
+    });
+
+    if (p.isCancel(answer)) {
+      p.cancel("Cancelled");
+      this.exit(1);
+    }
+
+    return ((answer as string) ?? "").trim();
+  }
+
+  // Verify the Claude CLI is usable when --with-claude was requested. If not, say so and let
+  // the caller fall back to the classic name prompt rather than silently ignoring the flag.
+  private async ensureClaude(): Promise<boolean> {
+    if (await hasClaude()) return true;
+    p.log.warn(
+      "--with-claude was set but no usable Claude CLI was found — asking for a name instead.",
+    );
+    return false;
+  }
+
+  // From the plain-language goal, have Claude invent the name, description, and listing copy
+  // in one shot. Caller only reaches here when Claude is available and a goal was given.
+  // Best-effort: unparseable output returns null and the caller falls back to asking for a name.
+  private async generateDetails(goal: string): Promise<AppDetails | null> {
+    const spin = p.spinner();
+    spin.start("Naming your app and writing its listing with Claude");
+    const details = await generateAppDetails(goal);
+    if (!details) {
+      spin.stop("Couldn't generate details — falling back", 0);
+      return null;
+    }
+    spin.stop(`Named it "${details.name}"`, 0);
+    return details;
   }
 
   private validateSlug(slug: string, targetDir: string): void {
