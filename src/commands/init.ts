@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { Args, Command, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
-import { ensureLoggedIn } from "../lib/auth.js";
+import { requireAccount } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
 import { type AppDetails, generateAppDetails, hasClaude, writeAppCopy } from "../lib/claude.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
@@ -89,6 +89,12 @@ export default class Init extends Command {
 
     p.intro("peek init");
 
+    // Gate first: no scaffolding, no prompts, no Claude calls until the user has a developer
+    // account. A declined sign-in stops here rather than building a starter kit they can't ship.
+    if (!(await requireAccount())) {
+      this.exit(1);
+    }
+
     p.note(
       [
         "Let's ship your Peek Pro App. Here's what we'll do:",
@@ -123,8 +129,6 @@ export default class Init extends Command {
     const targetDir = resolve(process.cwd(), slug);
 
     this.validateSlug(slug, targetDir);
-
-    await ensureLoggedIn();
 
     const templateSource = TEMPLATES[flags.template] ?? flags.template;
 

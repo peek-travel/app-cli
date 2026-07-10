@@ -184,3 +184,31 @@ export async function ensureLoggedIn(): Promise<void> {
   p.log.info("Not signed in — starting login flow.");
   await login();
 }
+
+// First-run gate for `peek init`: before scaffolding anything, welcome the user and make it
+// explicit that a Peek developer account is required, then have them opt into signing in.
+// Returns false when the user declines or cancels — the caller should stop without scaffolding.
+export async function requireAccount(): Promise<boolean> {
+  if (isLoggedIn()) return true;
+
+  p.note(
+    [
+      "Welcome to the Peek CLI.",
+      "",
+      "You need a Peek developer account to create and publish apps.",
+    ].join("\n"),
+    "Sign in required",
+  );
+
+  const proceed = await p.confirm({
+    message: "Sign in now?",
+  });
+
+  if (p.isCancel(proceed) || !proceed) {
+    p.cancel("A developer account is required. Run `peek init` again when you're ready to sign in.");
+    return false;
+  }
+
+  await login();
+  return true;
+}
