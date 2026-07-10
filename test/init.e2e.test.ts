@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execa } from "execa";
@@ -20,6 +20,12 @@ function cliEnv(extra: Record<string, string> = {}): Record<string, string | und
 
 beforeEach(async () => {
   configHome = await mkdtemp(join(tmpdir(), "peek-config-"));
+  // `requireAccount` probes the registry to verify developer access before scaffolding.
+  // Point it at an unroutable URL so that check fails fast (fetch rejects → treated as a
+  // non-blocking network error) instead of reaching the real registry from the test suite.
+  const peekDir = join(configHome, "peek");
+  await mkdir(peekDir, { recursive: true });
+  await writeFile(join(peekDir, "settings.json"), JSON.stringify({ registryUrl: "http://127.0.0.1:1" }));
 });
 
 describe("peek init", () => {

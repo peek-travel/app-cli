@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import open from "open";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
-import { confirmRegistryOverride, getRegistryUrl } from "./registry.js";
+import { confirmRegistryOverride, getRegistryApiUrl, getRegistryUrl } from "./registry.js";
 import { getAccessToken, isLoggedIn, saveTokens } from "./session.js";
 
 // Public client — no secret. PKCE (RFC 7636) is the whole security model.
@@ -18,6 +18,171 @@ function pkcePair(): { verifier: string; challenge: string } {
   const verifier = base64url(randomBytes(32));
   const challenge = base64url(createHash("sha256").update(verifier).digest());
   return { verifier, challenge };
+}
+
+function resultPage({
+  ok,
+  title,
+  message,
+  status,
+}: {
+  ok: boolean;
+  title: string;
+  message: string;
+  status: string;
+}): string {
+  const badgeGradient = ok
+    ? "linear-gradient(140deg, var(--violet), var(--magenta))"
+    : "linear-gradient(140deg, #c0446a, #d29a80)";
+  const badgeShadow = ok ? "rgba(154, 74, 174, 0.35)" : "rgba(192, 68, 106, 0.35)";
+  const mark = ok ? "M4.5 12.5 L10 18 L19.5 6.5" : "M6 6 L18 18 M18 6 L6 18";
+  const dotColor = ok ? "#16a34a" : "#dc2626";
+  const dotHalo = ok ? "rgba(22, 163, 74, 0.14)" : "rgba(220, 38, 38, 0.14)";
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title} &middot; Peek Pro</title>
+<style>
+  :root {
+    /* peek.gradient.master — sampled from the PP9 login art */
+    --purple: #6a2e86;
+    --violet: #9a4aae;
+    --magenta: #c96ba2;
+    --coral:  #d29a80;
+    --teal:   #5f8a84;
+    --slate:  #7a95a0;
+
+    --indigo: #4f46e5;   /* PP9 action color */
+    --ink: #17171f;
+    --ink-dim: #6b7280;
+    --card: #ffffff;
+    --hairline: #ececf1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    /* Layered mesh recreating the PP9 gradient */
+    background:
+      radial-gradient(75% 75% at 18% 2%,   var(--purple)  0%, transparent 55%),
+      radial-gradient(85% 85% at 92% 14%,  var(--violet)  0%, transparent 55%),
+      radial-gradient(80% 70% at 88% 46%,  var(--magenta) 0%, transparent 55%),
+      radial-gradient(95% 75% at 55% 72%,  var(--coral)   0%, transparent 58%),
+      radial-gradient(100% 85% at 16% 102%, var(--teal)   0%, transparent 60%),
+      radial-gradient(95% 95% at 104% 104%, var(--slate)  0%, transparent 60%),
+      linear-gradient(158deg, var(--purple), var(--magenta) 44%, var(--coral) 70%, var(--teal));
+    background-color: var(--purple);
+  }
+
+  /* Very slow ambient breathing so the art feels alive, not busy */
+  @media (prefers-reduced-motion: no-preference) {
+    body { animation: breathe 22s ease-in-out infinite alternate; }
+    @keyframes breathe {
+      from { background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%; }
+      to   { background-size: 112% 112%, 108% 108%, 110% 110%, 114% 114%, 112% 112%, 108% 108%, 100% 100%; }
+    }
+  }
+
+  .card {
+    width: 100%;
+    max-width: 420px;
+    padding: 48px 40px 40px;
+    text-align: center;
+    background: var(--card);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 2px rgba(24, 24, 40, 0.06),
+      0 30px 70px rgba(40, 20, 60, 0.28);
+    animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(16px) scale(0.99); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Result mark */
+  .badge {
+    width: 66px;
+    height: 66px;
+    margin: 4px auto 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: ${badgeGradient};
+    box-shadow: 0 10px 26px ${badgeShadow};
+    animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.6); }
+    to   { opacity: 1; transform: none; }
+  }
+  .badge svg { width: 32px; height: 32px; display: block; }
+  .badge path {
+    fill: none; stroke: #fff; stroke-width: 3.2;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 40; stroke-dashoffset: 40;
+    animation: draw 0.45s cubic-bezier(0.65, 0, 0.35, 1) 0.5s forwards;
+  }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  h1 { margin: 0 0 10px; font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  .message { margin: 0 0 26px; font-size: 15px; line-height: 1.55; color: var(--ink-dim); }
+
+  /* CLI-context cue — this page is served by the terminal */
+  .terminal {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: #f7f7fa;
+    border: 1px solid var(--hairline);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+  }
+  .terminal .prompt { color: var(--indigo); font-weight: 700; }
+  .terminal .status { color: var(--ink); }
+  .terminal .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: ${dotColor}; box-shadow: 0 0 0 3px ${dotHalo};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card, .badge, .badge path { animation: none; }
+    .badge path { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+  <main class="card" role="status" aria-live="polite">
+    <div class="badge" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="${mark}" /></svg>
+    </div>
+
+    <h1>${title}</h1>
+    <p class="message">${message}</p>
+
+    <div class="terminal" aria-hidden="true">
+      <span class="prompt">&rsaquo;</span>
+      <span>peek login</span>
+      <span class="dot"></span>
+      <span class="status">${status}</span>
+    </div>
+  </main>
+</body>
+</html>`;
 }
 
 interface CallbackServer {
@@ -47,14 +212,24 @@ function createCallbackServer(state: string): CallbackServer {
 
     if (error || !receivedCode || returnedState !== state) {
       res.writeHead(400, { "Content-Type": "text/html" }).end(
-        "<html><body>Sign-in failed or was cancelled. You can close this tab.</body></html>",
+        resultPage({
+          ok: false,
+          title: "Sign-in failed",
+          message: "Something went wrong or the request was cancelled. You can close this tab and try again.",
+          status: "failed",
+        }),
       );
       rejectCode(new CLIError(`Login failed: ${error ?? "invalid callback"}`));
       return;
     }
 
     res.writeHead(200, { "Content-Type": "text/html" }).end(
-      "<html><body>Signed in. You can close this tab and return to the terminal.</body></html>",
+      resultPage({
+        ok: true,
+        title: "You're signed in",
+        message: "You can close this tab and return to your terminal.",
+        status: "authenticated",
+      }),
     );
     resolveCode(receivedCode);
   });
@@ -185,30 +360,74 @@ export async function ensureLoggedIn(): Promise<void> {
   await login();
 }
 
-// First-run gate for `peek init`: before scaffolding anything, welcome the user and make it
-// explicit that a Peek developer account is required, then have them opt into signing in.
-// Returns false when the user declines or cancels — the caller should stop without scaffolding.
-export async function requireAccount(): Promise<boolean> {
-  if (isLoggedIn()) return true;
+// OAuth sign-in succeeds for anyone with a Peek login, but creating apps needs a separately
+// granted developer permission. Probe a permission-gated endpoint (listing the account's apps)
+// so an unapproved user gets a clear message here rather than a raw 403 deep inside init → sync.
+// Returns false only on a definitive 403; network/other errors let the flow proceed, since the
+// real registry calls will surface any genuine failure and this is meant as a courtesy check.
+async function verifyDeveloperAccess(): Promise<boolean> {
+  const accessToken = getAccessToken();
+  if (!accessToken) return false;
 
-  p.note(
-    [
-      "Welcome to the Peek CLI.",
-      "",
-      "You need a Peek developer account to create and publish apps.",
-    ].join("\n"),
-    "Sign in required",
-  );
+  const spinner = p.spinner();
+  spinner.start("Checking your developer access");
 
-  const proceed = await p.confirm({
-    message: "Sign in now?",
-  });
+  let status: number;
+  try {
+    const response = await fetch(`${getRegistryApiUrl()}/apps`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    status = response.status;
+  } catch {
+    spinner.stop("Couldn't verify developer access (network error) — continuing");
+    return true;
+  }
 
-  if (p.isCancel(proceed) || !proceed) {
-    p.cancel("A developer account is required. Run `peek init` again when you're ready to sign in.");
+  if (status === 403) {
+    spinner.stop("Account not approved for development yet");
+    p.note(
+      [
+        "You're successfully signed in — nice work!",
+        "",
+        "Your account isn't approved for app development yet. A Peek admin needs to",
+        "grant you developer access. Once they have, run `peek init` again and you'll",
+        "be ready to build.",
+      ].join("\n"),
+      "Almost there",
+    );
     return false;
   }
 
-  await login();
+  spinner.stop("Developer access confirmed");
   return true;
+}
+
+// First-run gate for `peek init`: before scaffolding anything, welcome the user and make it
+// explicit that a Peek developer account is required, then have them opt into signing in.
+// Returns false when the user declines/cancels or their account isn't approved for development —
+// the caller should stop without scaffolding.
+export async function requireAccount(): Promise<boolean> {
+  if (!isLoggedIn()) {
+    p.note(
+      [
+        "Welcome to the Peek CLI.",
+        "",
+        "You need a Peek developer account to create and publish apps.",
+      ].join("\n"),
+      "Sign in required",
+    );
+
+    const proceed = await p.confirm({
+      message: "Sign in now?",
+    });
+
+    if (p.isCancel(proceed) || !proceed) {
+      p.cancel("A developer account is required. Run `peek init` again when you're ready to sign in.");
+      return false;
+    }
+
+    await login();
+  }
+
+  return verifyDeveloperAccess();
 }
