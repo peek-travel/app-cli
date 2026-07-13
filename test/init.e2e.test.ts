@@ -35,7 +35,7 @@ describe("peek init", () => {
 
     await execa(
       CLI,
-      ["init", appName, "--template", FIXTURE_TEMPLATE, "--no-sync", "--no-dev"],
+      ["init", appName, "--template", FIXTURE_TEMPLATE, "--platform", "peek", "--no-sync", "--no-dev"],
       { cwd: workdir, env: cliEnv() },
     );
 
@@ -67,7 +67,7 @@ describe("peek init", () => {
 
     await execa(
       CLI,
-      ["init", "My Cool App!", "--template", FIXTURE_TEMPLATE, "--no-install", "--no-sync", "--no-dev"],
+      ["init", "My Cool App!", "--template", FIXTURE_TEMPLATE, "--platform", "peek", "--no-install", "--no-sync", "--no-dev"],
       { cwd: workdir, env: cliEnv() },
     );
 
@@ -87,7 +87,7 @@ describe("peek init", () => {
     await execa("touch", [join(appName, "existing-file")], { cwd: workdir });
 
     await expect(
-      execa(CLI, ["init", appName, "--template", FIXTURE_TEMPLATE, "--no-sync", "--no-dev"], {
+      execa(CLI, ["init", appName, "--template", FIXTURE_TEMPLATE, "--platform", "peek", "--no-sync", "--no-dev"], {
         cwd: workdir,
         env: cliEnv(),
       }),

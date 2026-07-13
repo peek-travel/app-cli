@@ -13,10 +13,18 @@ import {
   fetchTemplate,
   gitInit,
   installDependencies,
+  selectPlatformManifest,
   substituteTemplateVars,
 } from "../lib/scaffold.js";
 
 const SLUG_RE = /^[a-z][a-z0-9-]*$/;
+
+// Label shown to the developer → platform key used for the manifest file (app.<key>.json).
+const PLATFORMS = [
+  { value: "peek", label: "Peek" },
+  { value: "acme", label: "ACME" },
+  { value: "cng", label: "Connectngo" },
+] as const;
 
 function slugify(name: string): string {
   const slug = name
@@ -52,6 +60,10 @@ export default class Init extends Command {
     template: Flags.string({
       description: "Starter template to use",
       default: "nextjs",
+    }),
+    platform: Flags.string({
+      description: "Platform to develop for",
+      options: PLATFORMS.map((pl) => pl.value),
     }),
     goal: Flags.string({
       description:
@@ -125,6 +137,8 @@ export default class Init extends Command {
       appName = await this.resolveAppName(undefined);
     }
 
+    const platform = await this.resolvePlatform(flags.platform);
+
     const slug = slugify(appName);
     const targetDir = resolve(process.cwd(), slug);
 
@@ -136,6 +150,10 @@ export default class Init extends Command {
     fetchSpinner.start(`Fetching template ${templateSource}`);
     await fetchTemplate(templateSource, targetDir);
     fetchSpinner.stop("Template fetched");
+
+    // Starter kit ships a manifest per platform and no plain app.json — materialize the
+    // selected platform's manifest as app.json before the var-substitution/sync steps run.
+    await selectPlatformManifest(targetDir, platform);
 
     // Move into the freshly-cloned app dir so the rest of the flow (install, dev server,
     // sync) runs from inside it. targetDir stays absolute, so callers that already pass it
@@ -210,6 +228,22 @@ export default class Init extends Command {
       validate: (value) => {
         if (!value) return "App name is required";
       },
+    });
+
+    if (p.isCancel(answer)) {
+      p.cancel("Cancelled");
+      this.exit(1);
+    }
+
+    return answer as string;
+  }
+
+  private async resolvePlatform(provided?: string): Promise<string> {
+    if (provided) return provided;
+
+    const answer = await p.select({
+      message: "Which platform are you developing for?",
+      options: PLATFORMS.map((pl) => ({ value: pl.value, label: pl.label })),
     });
 
     if (p.isCancel(answer)) {

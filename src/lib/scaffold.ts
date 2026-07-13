@@ -33,6 +33,24 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
   }
 }
 
+// The starter kit ships one manifest per platform (app.peek.json, app.acme.json,
+// app.cng.json) and no plain app.json. Pick the selected platform's manifest and copy it
+// into app.json, which the rest of the flow (var substitution, sync, serve) expects.
+export async function selectPlatformManifest(
+  targetDir: string,
+  platform: string,
+): Promise<void> {
+  const src = join(targetDir, `app.${platform}.json`);
+  const dest = join(targetDir, "app.json");
+  if (!existsSync(src)) {
+    throw new CLIError(
+      `Template has no app.${platform}.json`,
+      "The starter kit must ship a manifest for the selected platform.",
+    );
+  }
+  await cp(src, dest);
+}
+
 export async function substituteTemplateVars(
   targetDir: string,
   vars: Record<string, string>,
