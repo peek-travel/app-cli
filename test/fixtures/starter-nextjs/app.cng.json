@@ -1,0 +1,10 @@
+{
+  "data": {
+    "app": {
+      "id": "{{APP_SLUG}}",
+      "name": {
+        "en": "{{APP_NAME}}"
+      }
+    }
+  }
+}

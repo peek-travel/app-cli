@@ -15,6 +15,10 @@ export default class Dev extends Command {
   static flags = {
     port: Flags.integer({ description: "Local port the dev server listens on", default: 3000 }),
     "no-sync": Flags.boolean({ description: "Skip pushing the tunnel URL to the registry", default: false }),
+    domain: Flags.string({
+      description:
+        "Use a persistent named tunnel at <app>-dev.<domain> instead of an ephemeral quick tunnel. Requires a Cloudflare login and access to the domain's zone.",
+    }),
   };
 
   async run(): Promise<void> {
@@ -39,6 +43,13 @@ export default class Dev extends Command {
       await confirmRegistryOverride();
     }
 
-    await serveWithTunnel({ cwd, appFile, pm, port: flags.port, sync: !flags["no-sync"] });
+    await serveWithTunnel({
+      cwd,
+      appFile,
+      pm,
+      port: flags.port,
+      sync: !flags["no-sync"],
+      domain: flags.domain,
+    });
   }
 }

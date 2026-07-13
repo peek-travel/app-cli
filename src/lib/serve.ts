@@ -7,7 +7,7 @@ import { CLIError } from "../errors.js";
 import { getInstallationsApiUrl, getRegistryUrl, isRegistryOverridden } from "./registry.js";
 import { writeEnvLocal } from "./scaffold.js";
 import { createTestApp, syncApp } from "./sync.js";
-import { startTunnel, warmTunnel } from "./tunnel.js";
+import { startNamedTunnel, startTunnel, warmTunnel } from "./tunnel.js";
 
 // Is a port bindable right now? Bind with no host so it covers every interface the dev
 // server might use — a partial match (e.g. something on 127.0.0.1 only) still counts as taken.
@@ -79,6 +79,31 @@ export interface ServeOptions {
   // When true: register app.json as a draft, create/reuse a test app (app-dev.json), and
   // publish that test app carrying the tunnel base_url. When false: just run the dev server.
   sync: boolean;
+  // When set, use a PERSISTENT named tunnel at <app>-dev.<domain> (requires a Cloudflare login)
+  // instead of an ephemeral quick tunnel. Keeps base_url stable across restarts.
+  domain?: string;
+}
+
+// Derive the tunnel's app slug from package.json "name": lowercased, non-alphanumerics collapsed
+// to dashes. Matches the reference dev.tmp so a tunnel keeps the same name across tools.
+function appSlug(cwd: string): string {
+  let name: string | undefined;
+  try {
+    ({ name } = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as { name?: string });
+  } catch {
+    throw new CLIError(`Could not read package.json in ${cwd}`);
+  }
+  const slug = (name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!slug) {
+    throw new CLIError(
+      'package.json "name" is missing or empty — cannot derive a tunnel name.',
+      "Set a name in package.json, then retry.",
+    );
+  }
+  return slug;
 }
 
 // The single source of truth for "run the app behind a public tunnel". Used by both
@@ -93,8 +118,10 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
   }
 
   const spinner = p.spinner();
-  spinner.start("Starting Cloudflare tunnel");
-  const tunnel = await startTunnel(port);
+  spinner.start(opts.domain ? "Starting persistent Cloudflare tunnel" : "Starting Cloudflare tunnel");
+  const tunnel = opts.domain
+    ? await startNamedTunnel({ port, appName: appSlug(opts.cwd), domain: opts.domain })
+    : await startTunnel(port);
   spinner.stop(`Tunnel up: ${tunnel.url}`);
 
   const devFile = devFileFor(opts.appFile);
