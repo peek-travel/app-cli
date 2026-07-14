@@ -30,7 +30,7 @@ interface AppPayload {
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   if (!token) {
-    throw new CLIError("Not signed in.", "Run `peek login` first.");
+    throw new CLIError("Not signed in.", "Run `peek auth login` first.");
   }
   return {
     Authorization: `Bearer ${token}`,

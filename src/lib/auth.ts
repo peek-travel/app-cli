@@ -176,7 +176,7 @@ function resultPage({
 
     <div class="terminal" aria-hidden="true">
       <span class="prompt">&rsaquo;</span>
-      <span>peek login</span>
+      <span>peek auth login</span>
       <span class="dot"></span>
       <span class="status">${status}</span>
     </div>
@@ -241,7 +241,7 @@ function createCallbackServer(state: string): CallbackServer {
   });
 
   const timeout = setTimeout(() => {
-    rejectCode(new CLIError("Login timed out waiting for browser sign-in.", "Run `peek login` again."));
+    rejectCode(new CLIError("Login timed out waiting for browser sign-in.", "Run `peek auth login` again."));
   }, CALLBACK_TIMEOUT_MS);
   timeout.unref();
 
@@ -301,17 +301,27 @@ async function exchangeCodeForToken(
   });
 }
 
-async function printIdentity(registryUrl: string, accessToken: string): Promise<void> {
+// Look up the signed-in user's email from the registry's OAuth userinfo endpoint, against
+// the CURRENT registry and token. Returns undefined on any failure (not signed in, network
+// error, non-ok) — every caller treats identity as best-effort, never load-bearing.
+export async function fetchUserEmail(): Promise<string | undefined> {
+  const accessToken = getAccessToken();
+  if (!accessToken) return undefined;
   try {
-    const response = await fetch(`${registryUrl}/oauth/userinfo`, {
+    const response = await fetch(`${getRegistryUrl()}/oauth/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!response.ok) return;
+    if (!response.ok) return undefined;
     const { email } = (await response.json()) as { email?: string };
-    if (email) p.log.success(`Signed in as ${email}`);
+    return email;
   } catch {
-    // best-effort only — login already succeeded without this
+    return undefined;
   }
+}
+
+async function printIdentity(): Promise<void> {
+  const email = await fetchUserEmail();
+  if (email) p.log.success(`Signed in as ${email}`);
 }
 
 export async function login(): Promise<void> {
@@ -349,8 +359,7 @@ export async function login(): Promise<void> {
   await exchangeCodeForToken(registryUrl, code, verifier, redirectUri);
   spinner.stop("Signed in");
 
-  const accessToken = getAccessToken();
-  if (accessToken) await printIdentity(registryUrl, accessToken);
+  await printIdentity();
 }
 
 export async function ensureLoggedIn(): Promise<void> {
