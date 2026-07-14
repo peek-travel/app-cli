@@ -20,7 +20,10 @@ Requires Node.js 20 or newer.
 | `peek init [app-name]` | Scaffold a new app from a starter template, register it, and start developing |
 | `peek dev` | Run the app in the current directory behind a public Cloudflare tunnel, syncing the tunnel URL to the registry |
 | `peek sync-app <file>` | Push an `app.json` to the registry (or `--pull` the registry version) |
-| `peek login` / `peek logout` | Sign in to / out of the Peek app registry |
+| `peek extensions list` | List the extensions apps can plug into (`--platform peek\|acme\|cng` to scope, `--json` for scripting) |
+| `peek extensions show <slug>` | Show one extension's type, platforms, and configurable fields (e.g. `booking_portal@v1`) |
+| `peek auth login` / `peek auth logout` | Sign in to / out of the Peek app registry |
+| `peek auth whoami` | Show which account you're signed in as, and against which registry |
 
 Run `peek <command> --help` for flags (`--port`, `--template`, `--no-sync`, ...).
 

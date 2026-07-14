@@ -6,6 +6,7 @@ import { CLIError } from "../errors.js";
 import { requireAccount } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
 import { type AppDetails, generateAppDetails, hasClaude, writeAppCopy } from "../lib/claude.js";
+import { PLATFORMS } from "../lib/platforms.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import {
@@ -18,13 +19,6 @@ import {
 } from "../lib/scaffold.js";
 
 const SLUG_RE = /^[a-z][a-z0-9-]*$/;
-
-// Label shown to the developer → platform key used for the manifest file (app.<key>.json).
-const PLATFORMS = [
-  { value: "peek", label: "Peek" },
-  { value: "acme", label: "ACME" },
-  { value: "cng", label: "Connectngo" },
-] as const;
 
 function slugify(name: string): string {
   const slug = name

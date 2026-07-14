@@ -1,14 +1,14 @@
 import { Command } from "@oclif/core";
 import * as p from "@clack/prompts";
-import { clear, isLoggedIn } from "../lib/session.js";
+import { clear, isLoggedIn } from "../../lib/session.js";
 
-export default class Logout extends Command {
+export default class AuthLogout extends Command {
   static description = "Sign out of the Peek app registry";
 
   async run(): Promise<void> {
-    await this.parse(Logout);
+    await this.parse(AuthLogout);
 
-    p.intro("peek logout");
+    p.intro("peek auth logout");
 
     const wasLoggedIn = isLoggedIn();
     // Always remove the session file — an expired or registry-mismatched token reads as
