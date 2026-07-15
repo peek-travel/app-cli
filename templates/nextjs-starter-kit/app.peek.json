@@ -34,7 +34,7 @@
         "registry_extendables": [
           {
             "configuration": {
-              "url": "/peek-pro/main",
+              "url": "/examples/peek-pro/main",
               "url_mode": "prepend_base_url"
             },
             "slug": "app_registry_settings_url@v1"

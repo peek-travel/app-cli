@@ -20,8 +20,8 @@ sessions, no cookies, and no server-rendered data. Every authenticated request r
 short-lived **peek-auth JWT** that the browser fetches from the parent frame. This skill is
 the map of that pipeline and the recipe for extending it.
 
-> Read this before touching anything under `app/peek-pro/`, `lib/with-peek.ts`,
-> `lib/api-auth.ts`, `lib/peek-service.ts`, or `app/peek-pro/client/`. The architecture is
+> Read this before touching anything under `app/examples/peek-pro/`, `lib/with-peek.ts`,
+> `lib/api-auth.ts`, `lib/peek-service.ts`, or `app/examples/peek-pro/client/`. The architecture is
 > load-bearing — the constraints below are in `AGENTS.md` because getting them wrong produces
 > an app that silently fails inside the iframe.
 
@@ -49,12 +49,12 @@ server context that has a persisted `installId` — see
 ## The request lifecycle (end to end)
 
 ```
-1. Peek Pro POSTs the signed JWT to  /peek-pro/main         (app/peek-pro/main/route.ts)
+1. Peek Pro POSTs the signed JWT to  /examples/peek-pro/main         (app/examples/peek-pro/main/route.ts)
 2. That route IGNORES the token and 302-redirects to the GET view
        → the token can't survive a redirect (no cookies); it isn't needed here
-3. The SPA boots at /peek-pro/main/view  ("use client")     (view/layout.tsx, view/page.tsx)
+3. The SPA boots at /examples/peek-pro/main/view  ("use client")     (view/layout.tsx, view/page.tsx)
 4. The SPA asks the parent for a token:  window.parent.postMessage({type:"peek-iframe-token-refresh"})
-       → parent replies  {type:"peek-token-response", token}   (app/peek-pro/client/api.ts)
+       → parent replies  {type:"peek-token-response", token}   (app/examples/peek-pro/client/api.ts)
 5. Token cached in memory; the view renders only AFTER it arrives (the "ready" gate)
 6. Each data call goes to an API route with header  x-peek-auth: Bearer <token>   (apiFetch)
 7. The route verifies the token and builds an install-scoped Peek client:
@@ -63,7 +63,7 @@ server context that has a persisted `installId` — see
 ```
 
 ### Why the POST route throws the token away
-`app/peek-pro/main/route.ts` does **not** authenticate. `page.tsx` can't receive POST, so the
+`app/examples/peek-pro/main/route.ts` does **not** authenticate. `page.tsx` can't receive POST, so the
 route exists only to convert Peek's POST into a redirect to the GET view. Verifying here would
 be pointless: the token can't be forwarded (no cookies) and the GET view is openly reachable
 anyway. Real auth happens per-API-request in step 7. Don't add verification to this route.
@@ -183,26 +183,26 @@ get-or-create). Different values, different sources.
 
 | Concern | File | What it does |
 | --- | --- | --- |
-| Embed entry (POST→redirect) | `app/peek-pro/main/route.ts` | Converts Peek's POST into a 302 to the view. Ignores the token by design. |
-| Token handshake + fetch helper | `app/peek-pro/client/api.ts` | `requestToken()` (the single postMessage channel) and `apiFetch()` (Bearer + 401-refresh-retry). |
-| The SPA bootstrap gate | `app/peek-pro/main/view/layout.tsx` + `page.tsx` | Loads Odyssey, calls `requestToken()`, renders children only once `ready`. |
+| Embed entry (POST→redirect) | `app/examples/peek-pro/main/route.ts` | Converts Peek's POST into a 302 to the view. Ignores the token by design. |
+| Token handshake + fetch helper | `app/examples/peek-pro/client/api.ts` | `requestToken()` (the single postMessage channel) and `apiFetch()` (Bearer + 401-refresh-retry). |
+| The SPA bootstrap gate | `app/examples/peek-pro/main/view/layout.tsx` + `page.tsx` | Loads Odyssey, calls `requestToken()`, renders children only once `ready`. |
 | Server-side auth wrapper | `lib/with-peek.ts` | `withPeekAuthentication(handler)` — wraps a route so it receives a verified `PeekAccessService` + claims. |
 | Token verification | `lib/api-auth.ts` | `requirePeekAuth(request)` — pulls `x-peek-auth`, verifies, returns claims or a 401. |
 | Peek client construction | `lib/peek-service.ts` | `createPeekService(auth)` (install-scoped) and `verifyPeekAuthToken(token)`. |
 | Env contract | `lib/env.ts` | Zod-validated `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_API_URL`, `PEEK_APP_URL`. |
-| CSP / iframe headers | `next.config.ts` | `Content-Security-Policy: frame-ancestors 'self' *` on `/peek-pro/:path*`. |
+| CSP / iframe headers | `next.config.ts` | `Content-Security-Policy: frame-ancestors 'self' *` on `/examples/peek-pro/:path*`. |
 
 ## Recipe: add a new authenticated API route + client call
 
 This is the most common task. Follow the existing pattern exactly (see
-`app/peek-pro/main/api/me/route.ts` and `.../activities/route.ts` for live examples).
+`app/examples/peek-pro/main/api/me/route.ts` and `.../activities/route.ts` for live examples).
 
 **1. Server — the route.** Wrap the handler in `withPeekAuthentication`. It hands you a
 verified, install-scoped `PeekAccessService` (`peek`) and the token `auth` claims. Never read
 or decode the token yourself.
 
 ```ts
-// app/peek-pro/main/api/<thing>/route.ts
+// app/examples/peek-pro/main/api/<thing>/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { type PeekAccessService } from "@peektravel/app-utilities";
 import { withPeekAuthentication } from "@/lib/with-peek";
@@ -220,12 +220,12 @@ are handled for you. Only do this **after** the token gate (inside a `"use clien
 that lives under a layout which already called `requestToken()`).
 
 ```ts
-import { apiFetch } from "@/app/peek-pro/client/api";
-const { data } = await apiFetch<{ data: Thing[] }>("/peek-pro/main/api/<thing>");
+import { apiFetch } from "@/app/examples/peek-pro/client/api";
+const { data } = await apiFetch<{ data: Thing[] }>("/examples/peek-pro/main/api/<thing>");
 ```
 
 **3. If it's a whole new view (its own bootstrap):** give it a layout that calls
-`requestToken()` once and gates on `ready` (copy `app/peek-pro/main/view/layout.tsx` or the
+`requestToken()` once and gates on `ready` (copy `app/examples/peek-pro/main/view/layout.tsx` or the
 dashboard example's `layout.tsx`). **Exactly one requester per mounted subtree** — descendants
 read the cached token via `apiFetch`, they don't post their own request.
 
@@ -304,7 +304,7 @@ condition, not a client error.
 - **One token requester per mount.** Multiple `postMessage` listeners race and double-request
   the parent. Reuse `requestToken()` / `apiFetch`; the 401-refresh path is the same single
   channel, not a second bootstrap.
-- **Keep the `/peek-pro/*` CSP header.** Without `frame-ancestors 'self' *` Peek can't embed
+- **Keep the `/examples/peek-pro/*` CSP header.** Without `frame-ancestors 'self' *` Peek can't embed
   the app (and drop any `X-Frame-Options: DENY` Next might add).
 - **Never let a config error surface as a 401.** A `parseEnv` throw is a misconfigured deploy —
   return 500 and log it; only a failed token verification is a 401. Log the failure *reason*,

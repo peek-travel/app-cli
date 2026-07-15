@@ -6,8 +6,8 @@ you don't need it, no other cleanup required.
 
 Each example owns its own UI *and* its own API routes, colocated under the
 same folder, so deleting the folder removes both. The one exception is
-`app/peek-pro/main/api/activities` — the welcome page
-(`app/peek-pro/main/view/page.tsx`) depends on it directly to prove the Peek
+`app/examples/peek-pro/main/api/activities` — the welcome page
+(`app/examples/peek-pro/main/view/page.tsx`) depends on it directly to prove the Peek
 Pro connection works, so it lives with the main app and stays even if you
 delete every example.
 

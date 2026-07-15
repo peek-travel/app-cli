@@ -17,8 +17,6 @@ export default defineConfig({
       reporter: ["text", "lcov"],
       include: [
         "lib/**/*.ts",
-        "app/peek-pro/**/*.ts",
-        "app/peek-pro/**/*.tsx",
         "app/examples/**/*.ts",
         "app/examples/**/*.tsx",
       ],

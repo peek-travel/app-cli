@@ -35,13 +35,13 @@ of this skill so it can't go stale.)
 
 The embedded views load Odyssey through the npm package, in two pieces:
 
-1. **CSS, in a layout** (`app/peek-pro/main/view/layout.tsx`):
+1. **CSS, in a layout** (`app/examples/peek-pro/main/view/layout.tsx`):
    ```ts
    import '@peektravel/app-utilities/ui/tokens.css';
    import '@peektravel/app-utilities/ui/odyssey.css';
    ```
 2. **Component registration, client-side only** — via `OdysseyLoader`
-   (`app/peek-pro/main/OdysseyLoader.tsx`), which dynamically imports the elements in a
+   (`app/examples/peek-pro/main/OdysseyLoader.tsx`), which dynamically imports the elements in a
    `useEffect` so custom elements upgrade **after** React hydration (avoiding hydration
    mismatches):
    ```ts
@@ -61,7 +61,7 @@ has caused a real, silent bug. Know both before you add or edit a type:
 
 | File | Style | Role |
 | --- | --- | --- |
-| `app/peek-pro/client/env.d.ts` | `CustomEl<…>` = `DetailedHTMLProps<HTMLAttributes<HTMLElement>, …> & Extra` | **Authoritative.** For any element declared in both files, **this is the declaration that takes effect.** |
+| `app/examples/peek-pro/client/env.d.ts` | `CustomEl<…>` = `DetailedHTMLProps<HTMLAttributes<HTMLElement>, …> & Extra` | **Authoritative.** For any element declared in both files, **this is the declaration that takes effect.** |
 | `types/odyssey-elements.d.ts` | `HTMLAttributes<HTMLElement> & { … }` (richer literal unions, **but no `ref`/`key`** — see below) | Augments the same interface; **loses** to `env.d.ts` for any key they share. |
 
 **These elements are declared in BOTH files** — for them, `env.d.ts` wins:

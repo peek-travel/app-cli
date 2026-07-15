@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockRequestToken = vi.fn();
 const mockApiFetch = vi.fn();
-vi.mock("@/app/peek-pro/client/api", () => ({
+vi.mock("@/app/examples/peek-pro/client/api", () => ({
   requestToken: mockRequestToken,
   apiFetch: mockApiFetch,
 }));
@@ -115,7 +115,7 @@ describe("SettingsViewPage", () => {
     capturedEffects[1]?.();
     await Promise.resolve();
     await Promise.resolve();
-    expect(mockApiFetch).toHaveBeenCalledWith("/peek-pro/main/api/me");
+    expect(mockApiFetch).toHaveBeenCalledWith("/examples/peek-pro/main/api/me");
   });
 
   it("does not fetch the user's name before ready", () => {
@@ -192,7 +192,7 @@ describe("SettingsViewPage", () => {
 
     await (button?.props.onClick as () => Promise<void>)();
 
-    expect(mockApiFetch).toHaveBeenCalledWith("/peek-pro/main/api/activities");
+    expect(mockApiFetch).toHaveBeenCalledWith("/examples/peek-pro/main/api/activities");
     expect(setActivities).toHaveBeenCalledWith([
       { id: "a1", name: "Kayaking" },
     ]);

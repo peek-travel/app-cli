@@ -42,7 +42,7 @@ hand-write GraphQL.** This skill covers what it can do and the data rules around
 ## Using it in a route
 
 ```ts
-// app/peek-pro/main/api/<thing>/route.ts
+// app/examples/peek-pro/main/api/<thing>/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { type PeekAccessService } from "@peektravel/app-utilities";
 import { withPeekAuthentication } from "@/lib/with-peek";
@@ -81,7 +81,7 @@ capability is genuinely **absent** from the types — and flag that to the user 
 
 ### Methods confirmed in use by this starter kit
 
-A few concrete examples from the shipped routes (`app/peek-pro/main/api/` and
+A few concrete examples from the shipped routes (`app/examples/peek-pro/main/api/` and
 `app/examples/dashboard/api/`) — a starting point, **not** the limit (the `.d.ts` above is the
 full surface):
 

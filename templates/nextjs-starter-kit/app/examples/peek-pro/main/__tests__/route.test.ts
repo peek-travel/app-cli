@@ -14,11 +14,11 @@ vi.mock('@/lib/env', () => ({
 // Import after mocking
 const { POST, GET } = await import('../route');
 
-describe('POST /peek-pro/main', () => {
+describe('POST /examples/peek-pro/main', () => {
   it('redirects to the GET view (token in body is ignored)', () => {
     const res = POST();
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`${ORIGIN}/peek-pro/main/view`);
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/examples/peek-pro/main/view`);
   });
 
   it('redirects to the GET view regardless of any posted token', () => {
@@ -30,10 +30,10 @@ describe('POST /peek-pro/main', () => {
   });
 });
 
-describe('GET /peek-pro/main', () => {
+describe('GET /examples/peek-pro/main', () => {
   it('redirects to the view, same as POST', () => {
     const res = GET();
     expect(res.status).toBe(302);
-    expect(res.headers.get('location')).toBe(`${ORIGIN}/peek-pro/main/view`);
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/examples/peek-pro/main/view`);
   });
 });

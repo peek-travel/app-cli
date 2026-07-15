@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { requestToken, apiFetch } from "@/app/peek-pro/client/api";
-import type { Activity } from "@/app/peek-pro/client/types";
+import { requestToken, apiFetch } from "@/app/examples/peek-pro/client/api";
+import type { Activity } from "@/app/examples/peek-pro/client/types";
 
 export default function SettingsViewPage() {
   const [ready, setReady] = useState(false);
@@ -27,7 +27,7 @@ export default function SettingsViewPage() {
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    apiFetch<{ name: string }>("/peek-pro/main/api/me")
+    apiFetch<{ name: string }>("/examples/peek-pro/main/api/me")
       .then((data) => {
         if (active) setUserName(data.name);
       })
@@ -44,7 +44,7 @@ export default function SettingsViewPage() {
     setError(null);
     try {
       const data = await apiFetch<{ activities: Activity[] }>(
-        "/peek-pro/main/api/activities",
+        "/examples/peek-pro/main/api/activities",
       );
       setActivities(data.activities);
     } catch (err) {
@@ -107,7 +107,7 @@ export default function SettingsViewPage() {
                 boxShadow: "0 2px 6px -2px rgba(124,58,237,0.2)",
               }}
             >
-              app/peek-pro/main/view/page.tsx
+              app/examples/peek-pro/main/view/page.tsx
             </code>{" "}
             — changes show up here right away, inside Peek Pro.
           </p>

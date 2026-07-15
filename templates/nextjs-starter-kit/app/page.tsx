@@ -9,7 +9,7 @@ export default function Home() {
           A Next.js starter kit for building apps that embed in Peek Pro. The
           main experience lives under{" "}
           <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-base dark:bg-zinc-800">
-            app/peek-pro/main
+            app/examples/peek-pro/main
           </code>
           . See{" "}
           <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-base dark:bg-zinc-800">

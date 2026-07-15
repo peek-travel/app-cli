@@ -2,7 +2,7 @@ import { parseEnv } from '@/lib/env';
 
 /**
  * Peek Pro embeds this app by POSTing the signed peek-auth JWT as a body param
- * to /peek-pro/main. This route handler exists only because `page.tsx`
+ * to /examples/peek-pro/main. This route handler exists only because `page.tsx`
  * cannot receive POST requests.
  *
  * The posted token is intentionally IGNORED here — we do not authenticate at
@@ -17,7 +17,7 @@ import { parseEnv } from '@/lib/env';
 function redirectToView() {
   const env = parseEnv();
   const base = env.PEEK_APP_URL.replace(/\/$/, '');
-  return Response.redirect(`${base}/peek-pro/main/view`, 302);
+  return Response.redirect(`${base}/examples/peek-pro/main/view`, 302);
 }
 
 export const POST = redirectToView;

@@ -45,7 +45,7 @@ So you **reuse `withPeekAuthentication`** (see `peek-embed-and-auth`). Do not bu
 auth scheme, an API key, or a bearer of your own.
 
 ```ts
-// app/peek-pro/mcp/route.ts
+// app/examples/peek-pro/mcp/route.ts
 import { type NextRequest, NextResponse } from 'next/server';
 import { type PeekAccessService } from '@peektravel/app-utilities';
 import { withPeekAuthentication } from '@/lib/with-peek';
@@ -95,7 +95,7 @@ a **typed input schema** (JSON Schema — this is the contract the orchestrator 
 use** — don't fork a parallel implementation.
 
 ```ts
-// app/peek-pro/mcp/tools.ts
+// app/examples/peek-pro/mcp/tools.ts
 import { type PeekAccessService } from '@peektravel/app-utilities';
 
 export const MCP_TOOLS = [
@@ -170,7 +170,7 @@ Concretely, once confirmed:
 
 1. **In discovery/planning**, agree the tool list with the user (above) and record it in the plan
    alongside the UI and data flow.
-2. **In the build**, add the `app/peek-pro/mcp` route + tools module, reusing
+2. **In the build**, add the `app/examples/peek-pro/mcp` route + tools module, reusing
    `withPeekAuthentication` and the same service-layer functions as the UI.
 3. **Declare the endpoint in `app.json`** so Peek/the orchestrator can find it. The exact
    registry extendable/key for an MCP endpoint URL is volatile — check the installed package
@@ -189,7 +189,7 @@ flag any risk to the user before shipping:**
 - **Must run on the Node.js runtime, not Edge.** `PeekAccessService` is **Node-only** (it verifies
   the JWT and mints API tokens with Node `crypto`). If the route is put on the Edge runtime
   (`export const runtime = 'edge'`, or a host that defaults routes to Edge), token verification and
-  the SDK break. Keep the `app/peek-pro/mcp` route on Node.
+  the SDK break. Keep the `app/examples/peek-pro/mcp` route on Node.
 - **Streaming transport vs. serverless limits.** If the MCP transport the orchestrator requires is
   **SSE / long-lived Streamable HTTP**, serverless hosts (Vercel by default) cap function duration
   and may buffer responses — a long-lived stream can be cut off or never flush. A plain

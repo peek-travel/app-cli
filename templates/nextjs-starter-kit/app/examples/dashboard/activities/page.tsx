@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/app/peek-pro/client/api";
-import type { Activity } from "@/app/peek-pro/client/types";
+import { apiFetch } from "@/app/examples/peek-pro/client/api";
+import type { Activity } from "@/app/examples/peek-pro/client/types";
 
 export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -11,7 +11,7 @@ export default function ActivitiesPage() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await apiFetch<{ activities: Activity[] }>("/peek-pro/main/api/activities");
+        const data = await apiFetch<{ activities: Activity[] }>("/examples/peek-pro/main/api/activities");
         setActivities(data.activities);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");

@@ -48,8 +48,8 @@ Development Hub, and **deployment** to your host. This skill covers all three.
   **`peek_backoffice_api@v1`**, which is what grants the app access to the back-office API
   used via `PeekAccessService` (see `peek-backoffice-api`).
 - **`registry_extendables`** — how Peek surfaces the app. This kit ships
-  **`app_registry_settings_url@v1`** with `url: "/peek-pro/main"` and
-  `url_mode: "prepend_base_url"` — i.e. Peek loads `<base_url>/peek-pro/main` (the embed entry
+  **`app_registry_settings_url@v1`** with `url: "/examples/peek-pro/main"` and
+  `url_mode: "prepend_base_url"` — i.e. Peek loads `<base_url>/examples/peek-pro/main` (the embed entry
   route) inside the iframe. **This URL is what Peek POSTs to** — it must match the embed route
   (see `peek-embed-and-auth`). If you add a **webhook**, its endpoint URL is declared here too
   (see `peek-webhooks`; pull the live doc for the exact registry keys).
@@ -176,7 +176,7 @@ recommended default; any Node-capable host works.
 - [ ] Host env is one **coherent prod set**: `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_APP_URL`, and
       `PEEK_API_URL` (prod default — do **not** carry over the sandbox URL from `.env.local`); Neon
       `DATABASE_URL` if used.
-- [ ] Register the embed URL (`<base_url>/peek-pro/main`) and any webhook URLs in the Hub /
+- [ ] Register the embed URL (`<base_url>/examples/peek-pro/main`) and any webhook URLs in the Hub /
       `app.json`; validate in **sandbox** (the `peek dev` test app) first.
 - [ ] Confirm the embed loads in the iframe (CSP `frame-ancestors` is set in `next.config.ts`).
 

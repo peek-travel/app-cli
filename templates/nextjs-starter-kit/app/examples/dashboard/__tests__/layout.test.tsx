@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockRequestToken = vi.fn();
-vi.mock("@/app/peek-pro/client/api", () => ({
+vi.mock("@/app/examples/peek-pro/client/api", () => ({
   requestToken: mockRequestToken,
   apiFetch: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({ default: vi.fn() }));
 
-vi.mock("@/app/peek-pro/main/OdysseyLoader", () => ({ OdysseyLoader: () => null }));
+vi.mock("@/app/examples/peek-pro/main/OdysseyLoader", () => ({ OdysseyLoader: () => null }));
 vi.mock("@peektravel/app-utilities/ui/tokens.css", () => ({}));
 vi.mock("@peektravel/app-utilities/ui/odyssey.css", () => ({}));
 

@@ -18,7 +18,7 @@ features (waitlist, abandoned bookings, dynamic pricing, sync) depend on them. T
 from Peek; there is no peek-auth token.
 
 > **Not yet scaffolded.** Phase 0 of this starter kit ships no webhook endpoint. This skill is
-> how you add one. Follow the existing route conventions under `app/peek-pro/`.
+> how you add one. Follow the existing route conventions under `app/examples/peek-pro/`.
 
 ## Always pull the live webhook doc first
 
@@ -47,7 +47,7 @@ Two webhooks: **booking events** and **waiver events**.
    **fixed format** (no query). The exact config keys and the canonical booking query string
    live in the **live doc** — pull them, don't bake. (`TODO(verify)` full registry docs.)
 2. **Endpoint (you implement it).** Peek POSTs the event to a route your app exposes — build it
-   as a Next.js Route Handler under `app/peek-pro/` (string/JSON responses only; per AGENTS.md,
+   as a Next.js Route Handler under `app/examples/peek-pro/` (string/JSON responses only; per AGENTS.md,
    never `react-dom/server` in route handlers).
 3. **Parsing (in your handler, via the npm package).** Transform the delivery with the
    package's **pure parser functions** rather than reading raw JSON. Confirm exact names in the

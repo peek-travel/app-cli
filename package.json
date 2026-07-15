@@ -1,6 +1,6 @@
 {
   "name": "@peektravel/app-cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "CLI for scaffolding, developing, and publishing Peek apps",
   "license": "MIT",
   "author": "Peek Travel, Inc.",
