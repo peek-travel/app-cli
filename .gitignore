@@ -4,3 +4,9 @@ dist/
 .DS_Store
 tmp/
 bin/local
+
+# Build artifacts inside vendored templates. The template ships its own gitignore as a
+# plain `gitignore` file (npm strips real .gitignore files from published tarballs), so it
+# no longer masks these from this repo — ignore them here.
+templates/*/.next/
+templates/*/next-env.d.ts
