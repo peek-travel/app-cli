@@ -16,6 +16,7 @@ import {
   installDependencies,
   selectPlatformManifest,
   substituteTemplateVars,
+  writeKitMetadata,
 } from "../lib/scaffold.js";
 
 const SLUG_RE = /^[a-z][a-z0-9-]*$/;
@@ -139,6 +140,9 @@ export default class Init extends Command {
     // Starter kit ships a manifest per platform and no plain app.json — materialize the
     // selected platform's manifest as app.json before the var-substitution/sync steps run.
     await selectPlatformManifest(targetDir, platform);
+
+    // Stamp the app with what created it (starter kit + CLI version) before we cd in.
+    await writeKitMetadata(targetDir, DEFAULT_TEMPLATE, platform);
 
     // Move into the freshly-scaffolded app dir so the rest of the flow (install, dev server,
     // sync) runs from inside it. targetDir stays absolute, so callers that already pass it
