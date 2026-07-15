@@ -16,7 +16,7 @@ const { createCngService } = await import('../cng-service');
 const mockAuth: PeekAuthTokenClaims = {
   installId: 'install-abc',
   displayVersion: '1.0',
-  user: { email: 'user@example.com', id: 'user-1', name: 'Alice', isAdmin: false, locale: 'en' },
+  user: { email: 'user@example.com', id: 'user-1', name: 'Alice', isAdmin: false, locale: 'en', platform: 'cng' },
 };
 
 describe('createCngService', () => {

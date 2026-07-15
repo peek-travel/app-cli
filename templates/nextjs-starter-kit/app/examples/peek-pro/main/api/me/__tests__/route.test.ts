@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("@/lib/with-peek", () => ({
-  withPeekAuthentication:
+vi.mock("@/lib/with-app", () => ({
+  withAppAuthentication:
     (handler: (...args: unknown[]) => unknown) => (request: NextRequest) =>
       handler(request, fakePeek, fakeAuth),
 }));

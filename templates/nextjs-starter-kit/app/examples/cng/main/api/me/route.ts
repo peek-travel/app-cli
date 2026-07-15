@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { withCngAuthentication } from "@/lib/with-cng";
+import { withAppAuthentication } from "@/lib/with-app";
 
-export const GET = withCngAuthentication(async (_request, _cng, auth) => {
+export const GET = withAppAuthentication(async (_request, _service, auth) => {
   return NextResponse.json({ name: auth.user.name });
 });

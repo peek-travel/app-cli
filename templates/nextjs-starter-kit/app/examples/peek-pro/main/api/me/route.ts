@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { withPeekAuthentication } from "@/lib/with-peek";
+import { withAppAuthentication } from "@/lib/with-app";
 
-export const GET = withPeekAuthentication(async (_request, _peek, auth) => {
+export const GET = withAppAuthentication(async (_request, _service, auth) => {
   return NextResponse.json({ name: auth.user.name });
 });

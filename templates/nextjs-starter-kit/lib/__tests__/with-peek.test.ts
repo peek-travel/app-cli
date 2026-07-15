@@ -13,7 +13,7 @@ const { withPeekAuthentication } = await import('../with-peek');
 const fakeClaims: PeekAuthTokenClaims = {
   installId: 'install-abc',
   displayVersion: '1.0',
-  user: { email: 'user@example.com', id: 'user-1', name: 'Alice', isAdmin: false, locale: 'en' },
+  user: { email: 'user@example.com', id: 'user-1', name: 'Alice', isAdmin: false, locale: 'en', platform: 'peek' },
 };
 const fakePeek = {} as never;
 const fakeRequest = new NextRequest('http://localhost/api/test');
