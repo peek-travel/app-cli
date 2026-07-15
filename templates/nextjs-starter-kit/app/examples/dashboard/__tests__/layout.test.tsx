@@ -8,7 +8,7 @@ vi.mock("@/lib/app-client/api", () => ({
 
 vi.mock("next/link", () => ({ default: vi.fn() }));
 
-vi.mock("@/app/examples/peek-pro/main/OdysseyLoader", () => ({ OdysseyLoader: () => null }));
+vi.mock("@/lib/odyssey/OdysseyLoader", () => ({ OdysseyLoader: () => null }));
 vi.mock("@peektravel/app-utilities/ui/tokens.css", () => ({}));
 vi.mock("@peektravel/app-utilities/ui/odyssey.css", () => ({}));
 

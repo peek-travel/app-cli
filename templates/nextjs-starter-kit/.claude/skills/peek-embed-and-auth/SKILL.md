@@ -225,7 +225,7 @@ const { data } = await apiFetch<{ data: Thing[] }>("/examples/peek-pro/main/api/
 ```
 
 **3. If it's a whole new view (its own bootstrap):** give it a layout that calls
-`requestToken()` once and gates on `ready` (copy `app/examples/peek-pro/main/view/layout.tsx` or the
+`requestToken()` once and gates on `ready` (copy the shared `lib/odyssey/SettingsViewLayout.tsx` or the
 dashboard example's `layout.tsx`). **Exactly one requester per mounted subtree** — descendants
 read the cached token via `apiFetch`, they don't post their own request.
 

@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@peektravel/app-utilities/ui/tokens.css', () => ({}));
 vi.mock('@peektravel/app-utilities/ui/odyssey.css', () => ({}));
-vi.mock('../../OdysseyLoader', () => ({ OdysseyLoader: () => null }));
+vi.mock('@/lib/odyssey/OdysseyLoader', () => ({ OdysseyLoader: () => null }));
 
-const { default: SettingsViewLayout } = await import('../layout');
+const { default: SettingsViewLayout } = await import('../SettingsViewLayout');
 
 describe('SettingsViewLayout', () => {
   it('renders children inside the layout', () => {
