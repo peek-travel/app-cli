@@ -8,3 +8,11 @@
 allowBuilds:
   sharp: false
   unrs-resolver: false
+
+# minimumReleaseAge blocks packages published within a recent window as a
+# supply-chain safeguard against a freshly-hijacked release. Our own first-party
+# scope is trusted, so exempt it — otherwise every fresh @peektravel/* publish is
+# unusable until the age window passes. Third-party deps stay gated by whatever
+# base minimumReleaseAge is active in the environment.
+minimumReleaseAgeExclude:
+  - '@peektravel/*'
