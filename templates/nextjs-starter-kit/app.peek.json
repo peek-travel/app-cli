@@ -28,6 +28,7 @@
               "configuration": {},
               "slug": "peek_backoffice_api@v1"
             }
+
           ]
         },
         "categories": [],
@@ -38,6 +39,12 @@
               "url_mode": "prepend_base_url"
             },
             "slug": "app_registry_settings_url@v1"
+          },
+          {
+            "configuration": {
+              "url": "/examples/webhooks/install-status"
+            },
+            "slug": "app_registry_webhook@v1"
           }
         ]
       }
