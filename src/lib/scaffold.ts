@@ -1,4 +1,4 @@
-import { cp, readFile, writeFile } from "node:fs/promises";
+import { cp, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createRequire } from "node:module";
@@ -36,6 +36,13 @@ const TEMPLATE_VAR_FILES = ["package.json", "README.md", "app/layout.tsx", "app.
 // the whole tree and installDependencies would run against stale, mis-linked modules.
 const TEMPLATE_COPY_IGNORE = new Set(["node_modules", ".next", ".git"]);
 
+// npm strips any file literally named `.gitignore` from a published tarball — a hardcoded
+// behavior with no opt-out (see https://github.com/npm/npm/issues/1862). The vendored kit
+// therefore ships its gitignore as a plain `gitignore`, which survives publish, and we
+// restore the leading dot after copying. Without this the scaffolded app would ship with no
+// real .gitignore — only the 2-line .env.local fallback ensureEnvLocalIgnored writes.
+const TEMPLATE_GITIGNORE = "gitignore";
+
 // Copies the starter kit from the local filesystem into the new app dir. The source is
 // always the kit vendored into the CLI — nothing is downloaded at scaffold time.
 export async function fetchTemplate(source: string, targetDir: string): Promise<void> {
@@ -49,6 +56,14 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
       `Failed to scaffold from template "${source}": ${(error as Error).message}`,
       "The bundled starter kit is missing from the CLI install — reinstall @peektravel/app-cli.",
     );
+  }
+
+  // Restore the dot npm stripped at publish. Guarded: dev checkouts may still carry a real
+  // .gitignore, and either way a missing source file is not fatal (the .env.local fallback
+  // still runs later).
+  const shipped = join(targetDir, TEMPLATE_GITIGNORE);
+  if (existsSync(shipped)) {
+    await rename(shipped, join(targetDir, ".gitignore"));
   }
 }
 
