@@ -37,10 +37,6 @@ function slugify(name: string): string {
   return SLUG_RE.test(slug) ? slug : `app-${slug}`.replace(/-+$/, "");
 }
 
-const TEMPLATES: Record<string, string> = {
-  nextjs: DEFAULT_TEMPLATE,
-};
-
 export default class Init extends Command {
   static description = "Scaffold a new Peek app from a starter template";
 
@@ -51,10 +47,6 @@ export default class Init extends Command {
   };
 
   static flags = {
-    template: Flags.string({
-      description: "Starter template to use",
-      default: "nextjs",
-    }),
     platform: Flags.string({
       description: "Platform to develop for",
       options: PLATFORMS.map((pl) => pl.value),
@@ -138,18 +130,20 @@ export default class Init extends Command {
 
     this.validateSlug(slug, targetDir);
 
-    const templateSource = TEMPLATES[flags.template] ?? flags.template;
+    // Always the starter kit vendored into the CLI. PEEK_INIT_TEMPLATE is a test-only seam
+    // to scaffold from a fixture instead — it is not a user-facing option.
+    const templateSource = process.env.PEEK_INIT_TEMPLATE ?? DEFAULT_TEMPLATE;
 
     const fetchSpinner = p.spinner();
-    fetchSpinner.start(`Fetching template ${templateSource}`);
+    fetchSpinner.start("Copying the starter kit");
     await fetchTemplate(templateSource, targetDir);
-    fetchSpinner.stop("Template fetched");
+    fetchSpinner.stop("Starter kit ready");
 
     // Starter kit ships a manifest per platform and no plain app.json — materialize the
     // selected platform's manifest as app.json before the var-substitution/sync steps run.
     await selectPlatformManifest(targetDir, platform);
 
-    // Move into the freshly-cloned app dir so the rest of the flow (install, dev server,
+    // Move into the freshly-scaffolded app dir so the rest of the flow (install, dev server,
     // sync) runs from inside it. targetDir stays absolute, so callers that already pass it
     // explicitly are unaffected — this just makes the process's cwd match the app.
     process.chdir(targetDir);

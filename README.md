@@ -25,7 +25,7 @@ Requires Node.js 20 or newer.
 | `peek auth login` / `peek auth logout` | Sign in to / out of the Peek app registry |
 | `peek auth whoami` | Show which account you're signed in as, and against which registry |
 
-Run `peek <command> --help` for flags (`--port`, `--template`, `--no-sync`, ...).
+Run `peek <command> --help` for flags (`--port`, `--platform`, `--no-sync`, ...).
 
 ## How local development works
 
@@ -41,11 +41,9 @@ app's test-app `base_url`. Two things to know:
   keep it that way, and set `PEEK_APP_SECRET` as a real environment variable
   in production deploys.
 
-`--template` accepts any [giget](https://github.com/unjs/giget) source
-(`github:owner/repo`, a URL, or a local `file:`/relative path). Templates are
-regular npm projects: scaffolding runs their dependency install and dev
-server, which executes code from that template — only point it at sources you
-trust.
+`peek init` scaffolds from a starter kit bundled inside the CLI — it is copied
+into place with no network fetch and no repo to clone. The scaffolded app is a
+regular Next.js project: `peek init` runs its dependency install and dev server.
 
 ## Contributing
 
@@ -70,13 +68,13 @@ Two entrypoints for running the CLI from a checkout:
 ### Testing `peek init` locally
 
 A minimal fixture template lives at `test/fixtures/starter-nextjs` for
-offline/fast iteration:
+offline/fast iteration. Point `init` at it with the `PEEK_INIT_TEMPLATE` env
+var (a test-only seam — there is no user-facing template option):
 
 ```bash
 cd /tmp && mkdir scratch && cd scratch
-node /path/to/peek-cli/bin/run.js init demo-app \
-  --template "file:/path/to/peek-cli/test/fixtures/starter-nextjs" \
-  --no-dev
+PEEK_INIT_TEMPLATE="file:/path/to/peek-cli/test/fixtures/starter-nextjs" \
+  node /path/to/peek-cli/bin/run.js init demo-app --no-dev
 
 cd demo-app && npm run dev   # confirm localhost:3000 serves the starter
 ```

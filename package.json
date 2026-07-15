@@ -1,6 +1,6 @@
 {
   "name": "@peektravel/app-cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "CLI for scaffolding, developing, and publishing Peek apps",
   "license": "MIT",
   "author": "Peek Travel, Inc.",
@@ -24,7 +24,8 @@
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "templates"
   ],
   "engines": {
     "node": ">=20.0.0"
@@ -57,7 +58,6 @@
     "@oclif/plugin-warn-if-update-available": "^3.1.68",
     "cloudflared": "^0.7.1",
     "execa": "^9.5.2",
-    "giget": "^1.2.5",
     "open": "^11.0.0"
   },
   "devDependencies": {

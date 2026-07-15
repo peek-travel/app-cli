@@ -1,0 +1,2 @@
+# Test files intentionally use hardcoded secrets as test fixtures (not real credentials).
+**/__tests__/**

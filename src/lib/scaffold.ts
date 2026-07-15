@@ -2,33 +2,37 @@ import { cp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { downloadTemplate } from "giget";
 import { execa } from "execa";
 import { CLIError } from "../errors.js";
 
-export const DEFAULT_TEMPLATE = "github:peek-travel/nextjs-starter-kit";
+// The default starter kit is vendored into the CLI package under templates/ (see the
+// package.json "files" list) so `peek init` works offline and always ships a known-good
+// version — no git/tarball fetch at runtime. Resolved relative to this module: both
+// src/lib/scaffold.ts and dist/lib/scaffold.js sit two dirs below the package root, so
+// ../../templates lands on the vendored copy in dev and in the published package alike.
+export const DEFAULT_TEMPLATE = fileURLToPath(
+  new URL("../../templates/nextjs-starter-kit", import.meta.url),
+);
 
 // Files checked for {{APP_NAME}} / {{APP_SLUG}} placeholders. Kept as a small explicit
 // list — no templating engine, just string replace.
 const TEMPLATE_VAR_FILES = ["package.json", "README.md", "app/layout.tsx", "app.json"];
 
-const LOCAL_SOURCE_RE = /^(file:|\.{1,2}\/|\/)/;
-
+// Copies the starter kit from the local filesystem into the new app dir. The source is
+// always the kit vendored into the CLI (or a fixture path via the PEEK_INIT_TEMPLATE test
+// seam) — nothing is downloaded at scaffold time.
 export async function fetchTemplate(source: string, targetDir: string): Promise<void> {
+  const path = source.startsWith("file:") ? fileURLToPath(new URL(source)) : source;
   try {
-    if (LOCAL_SOURCE_RE.test(source)) {
-      // giget has no local-filesystem provider — local paths cover scratch/dev templates
-      // without a real git host.
-      const path = source.startsWith("file:") ? fileURLToPath(new URL(source)) : source;
-      await cp(path, targetDir, { recursive: true });
-      return;
-    }
-
-    await downloadTemplate(source, { dir: targetDir, force: false });
+    await cp(path, targetDir, { recursive: true });
   } catch (error) {
+    const hint =
+      source === DEFAULT_TEMPLATE
+        ? "The bundled starter kit is missing from the CLI install — reinstall @peektravel/app-cli."
+        : "Check that the template path exists and is readable.";
     throw new CLIError(
-      `Failed to fetch template "${source}": ${(error as Error).message}`,
-      "Check your network connection and that the template repo exists.",
+      `Failed to scaffold from template "${source}": ${(error as Error).message}`,
+      hint,
     );
   }
 }
