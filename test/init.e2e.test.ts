@@ -77,6 +77,12 @@ describe("peek init", () => {
     const app = JSON.parse(await readFile(join(workdir, "my-cool-app", "app.json"), "utf8"));
     expect(app.data.app.id).toBe("my-cool-app");
     expect(app.data.app.name.en).toBe("My Cool App!");
+
+    // .peek-kit.json records the starter kit + the CLI version that scaffolded it.
+    const kit = JSON.parse(await readFile(join(workdir, "my-cool-app", ".peek-kit.json"), "utf8"));
+    expect(kit.starterKit).toBe("nextjs-starter-kit");
+    expect(kit.platform).toBe("peek");
+    expect(kit.cliVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it("refuses to scaffold into a non-empty directory", async () => {
