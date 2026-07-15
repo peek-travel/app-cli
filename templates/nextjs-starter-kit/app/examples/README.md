@@ -20,3 +20,17 @@ recent bookings pulled live from the Peek Pro API.
 - API: `app/examples/dashboard/api/dashboard`, `app/examples/dashboard/api/bookings`
 - To try it, visit `/examples/dashboard` (it does its own token handshake with
   the parent frame, same pattern as the main welcome page).
+
+## webhooks
+
+An inbound webhook endpoint that Peek Pro POSTs to on install-status events
+(install / uninstall / etc.). Deliveries are authenticated with the same
+registry-signed peek-auth JWT the API pipeline uses, but via
+`requirePeekWebhookAuth`, which tolerates the `user: null` these system events
+carry. For now it just logs the delivery — add real handling once the payload
+shape is confirmed.
+
+- Route: `app/examples/webhooks/install-status/route.ts`
+- Auth helper: `lib/webhook-auth.ts`
+- Point the app's install-status webhook URL at
+  `/examples/webhooks/install-status` to receive deliveries.
