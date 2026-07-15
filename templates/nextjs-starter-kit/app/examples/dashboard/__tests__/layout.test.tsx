@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockRequestToken = vi.fn();
-vi.mock("@/app/examples/peek-pro/client/api", () => ({
+vi.mock("@/lib/app-client/api", () => ({
   requestToken: mockRequestToken,
   apiFetch: vi.fn(),
 }));

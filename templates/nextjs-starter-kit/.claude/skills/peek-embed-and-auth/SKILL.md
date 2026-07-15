@@ -21,7 +21,7 @@ short-lived **peek-auth JWT** that the browser fetches from the parent frame. Th
 the map of that pipeline and the recipe for extending it.
 
 > Read this before touching anything under `app/examples/peek-pro/`, `lib/with-peek.ts`,
-> `lib/api-auth.ts`, `lib/peek-service.ts`, or `app/examples/peek-pro/client/`. The architecture is
+> `lib/api-auth.ts`, `lib/peek-service.ts`, or `lib/app-client/`. The architecture is
 > load-bearing — the constraints below are in `AGENTS.md` because getting them wrong produces
 > an app that silently fails inside the iframe.
 
@@ -54,7 +54,7 @@ server context that has a persisted `installId` — see
        → the token can't survive a redirect (no cookies); it isn't needed here
 3. The SPA boots at /examples/peek-pro/main/view  ("use client")     (view/layout.tsx, view/page.tsx)
 4. The SPA asks the parent for a token:  window.parent.postMessage({type:"peek-iframe-token-refresh"})
-       → parent replies  {type:"peek-token-response", token}   (app/examples/peek-pro/client/api.ts)
+       → parent replies  {type:"peek-token-response", token}   (lib/app-client/api.ts)
 5. Token cached in memory; the view renders only AFTER it arrives (the "ready" gate)
 6. Each data call goes to an API route with header  x-peek-auth: Bearer <token>   (apiFetch)
 7. The route verifies the token and builds an install-scoped Peek client:
@@ -184,7 +184,7 @@ get-or-create). Different values, different sources.
 | Concern | File | What it does |
 | --- | --- | --- |
 | Embed entry (POST→redirect) | `app/examples/peek-pro/main/route.ts` | Converts Peek's POST into a 302 to the view. Ignores the token by design. |
-| Token handshake + fetch helper | `app/examples/peek-pro/client/api.ts` | `requestToken()` (the single postMessage channel) and `apiFetch()` (Bearer + 401-refresh-retry). |
+| Token handshake + fetch helper | `lib/app-client/api.ts` | `requestToken()` (the single postMessage channel) and `apiFetch()` (Bearer + 401-refresh-retry). |
 | The SPA bootstrap gate | `app/examples/peek-pro/main/view/layout.tsx` + `page.tsx` | Loads Odyssey, calls `requestToken()`, renders children only once `ready`. |
 | Server-side auth wrapper | `lib/with-peek.ts` | `withPeekAuthentication(handler)` — wraps a route so it receives a verified `PeekAccessService` + claims. |
 | Token verification | `lib/api-auth.ts` | `requirePeekAuth(request)` — pulls `x-peek-auth`, verifies, returns claims or a 401. |
@@ -220,7 +220,7 @@ are handled for you. Only do this **after** the token gate (inside a `"use clien
 that lives under a layout which already called `requestToken()`).
 
 ```ts
-import { apiFetch } from "@/app/examples/peek-pro/client/api";
+import { apiFetch } from "@/lib/app-client/api";
 const { data } = await apiFetch<{ data: Thing[] }>("/examples/peek-pro/main/api/<thing>");
 ```
 

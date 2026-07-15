@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/app/examples/peek-pro/client/api";
+import { apiFetch } from "@/lib/app-client/api";
 import type { DashboardStats } from "./types";
 
 /** Loads and renders the dashboard stat summary. Owns its own data fetch. */

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { requestToken, apiFetch } from "@/app/examples/cng/client/api";
-import type { Activity } from "@/app/examples/cng/client/types";
+import { requestToken, apiFetch } from "@/lib/app-client/api";
+import type { Activity } from "@/lib/app-client/types";
 
 export default function SettingsViewPage() {
   const [ready, setReady] = useState(false);
