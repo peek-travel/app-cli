@@ -72,8 +72,12 @@ npm run test:coverage
 - `app/examples/peek-pro/main/view/` — the embedded SPA (client components).
 - `app/examples/peek-pro/main/api/` — authenticated API routes.
 - `app/examples/peek-pro/client/api.ts` — token handshake + authenticated `apiFetch`.
-- `lib/` — env parsing, JWT verification, Peek service, `with-peek` wrapper.
-- `app.json` — the Peek app manifest (extendables, settings URL, listing).
+- `app/examples/cng/` — the same example wired to the Connect&GO backoffice
+  (`CngAccessService` / `with-cng`) instead of Peek. `app.cng.json` points its
+  settings URL here.
+- `lib/` — env parsing, JWT verification, the Peek service (`with-peek`) and the
+  CNG service (`with-cng`) wrappers.
+- `app.json` — the app manifest (extendables, settings URL, listing).
 
 ## Deploy
 

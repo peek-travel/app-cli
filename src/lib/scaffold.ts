@@ -1,6 +1,6 @@
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { CLIError } from "../errors.js";
@@ -18,21 +18,24 @@ export const DEFAULT_TEMPLATE = fileURLToPath(
 // list — no templating engine, just string replace.
 const TEMPLATE_VAR_FILES = ["package.json", "README.md", "app/layout.tsx", "app.json"];
 
+// Build artifacts / installed deps that must never be copied into a scaffolded app. npm
+// already strips node_modules at publish, but a local dev checkout of the vendored kit
+// carries them (hundreds of MB) — without this filter every `peek init` in dev would clone
+// the whole tree and installDependencies would run against stale, mis-linked modules.
+const TEMPLATE_COPY_IGNORE = new Set(["node_modules", ".next", ".git"]);
+
 // Copies the starter kit from the local filesystem into the new app dir. The source is
-// always the kit vendored into the CLI (or a fixture path via the PEEK_INIT_TEMPLATE test
-// seam) — nothing is downloaded at scaffold time.
+// always the kit vendored into the CLI — nothing is downloaded at scaffold time.
 export async function fetchTemplate(source: string, targetDir: string): Promise<void> {
-  const path = source.startsWith("file:") ? fileURLToPath(new URL(source)) : source;
   try {
-    await cp(path, targetDir, { recursive: true });
+    await cp(source, targetDir, {
+      recursive: true,
+      filter: (src) => !TEMPLATE_COPY_IGNORE.has(basename(src)),
+    });
   } catch (error) {
-    const hint =
-      source === DEFAULT_TEMPLATE
-        ? "The bundled starter kit is missing from the CLI install — reinstall @peektravel/app-cli."
-        : "Check that the template path exists and is readable.";
     throw new CLIError(
       `Failed to scaffold from template "${source}": ${(error as Error).message}`,
-      hint,
+      "The bundled starter kit is missing from the CLI install — reinstall @peektravel/app-cli.",
     );
   }
 }
