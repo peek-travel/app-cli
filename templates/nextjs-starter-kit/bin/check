@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Runs the same gates as CI (.github/workflows/ci.yml): lint, typecheck,
+# test with coverage, build. Run before pushing to catch failures locally.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm not found. Install: npm i -g pnpm@10" >&2
+  exit 1
+fi
+
+step() { echo -e "\n\033[1;34m▶ $1\033[0m" >&2; }
+
+step "Install (frozen lockfile)"
+pnpm install --frozen-lockfile
+
+step "Lint"
+pnpm lint
+
+step "Typecheck"
+pnpm typecheck
+
+step "Test with coverage"
+pnpm test:coverage
+
+step "Build"
+# Placeholder env satisfies build-time validation — matches CI. Real values
+# live only in the deployment environment.
+PEEK_APP_SECRET="${PEEK_APP_SECRET:-ci-placeholder-secret}" \
+PEEK_APP_ID="${PEEK_APP_ID:-ci-placeholder-app-id}" \
+PEEK_API_URL="${PEEK_API_URL:-https://api.example.com}" \
+PEEK_APP_URL="${PEEK_APP_URL:-https://app.example.com}" \
+  pnpm build
+
+echo -e "\n\033[1;32m✓ All checks passed\033[0m" >&2

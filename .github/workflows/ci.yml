@@ -25,3 +25,41 @@ jobs:
       - run: pnpm run build
 
       - run: pnpm test
+
+  # The starter kit is vendored under templates/, not fetched at runtime, so its own
+  # test suite no longer rides a separate repo's CI. Run it here — same lint · typecheck ·
+  # test · build the starter-kit repo used to run — so a bad vendored kit fails this repo's CI.
+  starter-kit:
+    name: Starter kit (templates/nextjs-starter-kit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/nextjs-starter-kit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: templates/nextjs-starter-kit/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm build
+        env:
+          # Placeholder values satisfy env validation at build time.
+          PEEK_APP_SECRET: ci-placeholder-secret
+          PEEK_APP_ID: ci-placeholder-app-id
+          PEEK_API_URL: https://api.example.com
+          PEEK_APP_URL: https://app.example.com

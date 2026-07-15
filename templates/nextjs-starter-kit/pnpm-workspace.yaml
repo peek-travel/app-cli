@@ -1,0 +1,10 @@
+# sharp and unrs-resolver ship prebuilt platform binaries, so their build scripts don't
+# need to run. Declaring that decision explicitly via allowBuilds (false = don't build)
+# keeps `pnpm install` non-interactive and clean on both pnpm 10 and pnpm 11.
+#
+# pnpm 11 hard-fails (ERR_PNPM_IGNORED_BUILDS) on any build script that hasn't been
+# explicitly allowed or denied and rewrites this file with allowBuilds placeholders —
+# the older `ignoredBuiltDependencies` denylist no longer counts as a decision.
+allowBuilds:
+  sharp: false
+  unrs-resolver: false

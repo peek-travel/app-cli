@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  Peek Pro app mockup — single-file starter (build step 2).
+  Copy into the project as index.html and build the proposed app's UI here.
+
+  BEFORE editing: read the current Odyssey component docs (tags, attributes, conventions):
+  https://cdn.jsdelivr.net/npm/@peektravel/app-utilities/docs/ui.md
+
+  Conventions (from ui.md):
+   - scalars (strings/booleans) -> HTML attributes
+   - rich data (arrays/objects)  -> set as JS properties on the element (el.columns = [...])
+   - events are CustomEvents     -> addEventListener(..., e => e.detail)
+   - wrap page/settings UI in <ody-page-container>
+  When unsure about a layout/flow, keep MULTIPLE variants in this one file (see the tabs
+  below) so the user can compare, then collapse to the chosen direction.
+
+  This mockup uses the CDN includes on purpose (it is standalone). The real app UI uses the
+  @peektravel/app-utilities npm package instead — see the odyssey-ui skill.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Peek app mockup</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@peektravel/app-utilities/dist/ui/tokens.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@peektravel/app-utilities/dist/ui/odyssey.css"
+    />
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/npm/@peektravel/app-utilities/dist/ui/index.js"
+    ></script>
+    <style>
+      body {
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <ody-page-container>
+      <!--
+        Variant comparison scaffold. Keep competing directions side-by-side in tabs while the
+        design is unsettled; delete the tabs and keep one panel once the user has chosen.
+        (Confirm the real <ody-tabs> tag/attributes against ui.md — they may differ.)
+      -->
+      <ody-tabs>
+        <ody-tab label="Variant A">
+          <!-- Build direction A here -->
+          <h1>Variant A</h1>
+          <ody-button variant="primary">Primary action</ody-button>
+        </ody-tab>
+        <ody-tab label="Variant B">
+          <!-- Build direction B here -->
+          <h1>Variant B</h1>
+          <ody-button variant="secondary">Secondary action</ody-button>
+        </ody-tab>
+      </ody-tabs>
+    </ody-page-container>
+
+    <script type="module">
+      // Rich data goes on the element as a JS PROPERTY, not an attribute. Example:
+      //   const table = document.querySelector('ody-table');
+      //   table.columns = [{ key: 'name', label: 'Name' }];
+      //   table.data = [{ name: 'Sunset Kayak Tour' }];
+      // Events are CustomEvents:
+      //   document.querySelector('ody-button')
+      //     .addEventListener('click', (e) => console.log(e.detail));
+    </script>
+  </body>
+</html>
