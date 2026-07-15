@@ -34,7 +34,7 @@ Test these especially — most bugs in Peek apps hide here:
 - **Auth / token handling** — token verification accepts valid tokens and rejects
   missing/expired/wrong-signature ones; the API pipeline returns 401 correctly
   (`lib/__tests__/api-auth.test.ts`, `with-peek.test.ts`, `peek-service.test.ts` show the
-  pattern). The client 401→refresh→retry path (`app/examples/peek-pro/client/__tests__/api.test.ts`).
+  pattern). The client 401→refresh→retry path (`lib/app-client/__tests__/api.test.ts`).
 - **Webhook "state, not change" derivation** — given repeated deliveries of the same booking,
   your new-vs-seen logic fires **once**; a changed field is detected by comparing stored vs.
   incoming. This is the single easiest thing to get wrong. See `peek-webhooks`.

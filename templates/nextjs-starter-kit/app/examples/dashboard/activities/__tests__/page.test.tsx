@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockApiFetch = vi.fn();
-vi.mock("@/app/examples/peek-pro/client/api", () => ({ apiFetch: mockApiFetch }));
+vi.mock("@/lib/app-client/api", () => ({ apiFetch: mockApiFetch }));
 
 let stateSequence: Array<[unknown, ReturnType<typeof vi.fn>]> = [];
 let stateCallIndex = 0;

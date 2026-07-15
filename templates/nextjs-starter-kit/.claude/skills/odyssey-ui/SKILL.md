@@ -8,7 +8,7 @@ description: >-
   npm vs CDN include paths, the attribute/property/event conventions, and pulling the live
   component docs. Triggers on "Odyssey", "ody-button", "ody-*", "Peek UI", "component",
   "style the app", "mockup", "design the view", "JSX.IntrinsicElements", "odyssey-elements.d.ts",
-  "env.d.ts", "ody-* attribute not working", "custom element typings", "ody-icon", "icon name",
+  "elements.d.ts", "ody-* attribute not working", "custom element typings", "ody-icon", "icon name",
   "iconNames", "brand icon", "which icons are available".
 ---
 
@@ -35,13 +35,18 @@ of this skill so it can't go stale.)
 
 The embedded views load Odyssey through the npm package, in two pieces:
 
-1. **CSS, in a layout** (`app/examples/peek-pro/main/view/layout.tsx`):
+Both pieces live in the shared `lib/odyssey/` module (used by every example — peek-pro, cng, …):
+
+1. **CSS + registration, in the shared view shell** (`lib/odyssey/SettingsViewLayout.tsx`):
    ```ts
+   import { OdysseyLoader } from '@/lib/odyssey/OdysseyLoader';
    import '@peektravel/app-utilities/ui/tokens.css';
    import '@peektravel/app-utilities/ui/odyssey.css';
    ```
+   Each example's `app/.../main/view/layout.tsx` just re-exports this shell, so Next still finds a
+   layout in the route tree.
 2. **Component registration, client-side only** — via `OdysseyLoader`
-   (`app/examples/peek-pro/main/OdysseyLoader.tsx`), which dynamically imports the elements in a
+   (`lib/odyssey/OdysseyLoader.tsx`), which dynamically imports the elements in a
    `useEffect` so custom elements upgrade **after** React hydration (avoiding hydration
    mismatches):
    ```ts
@@ -49,47 +54,33 @@ The embedded views load Odyssey through the npm package, in two pieces:
    useEffect(() => { import('@peektravel/app-utilities/ui'); }, []);
    ```
 
-**To render Odyssey in a new view:** put `<OdysseyLoader />` in the view's layout and import
-the two CSS files there (copy `view/layout.tsx` or the dashboard example's `layout.tsx`). Then
-use `<ody-*>` tags in your `"use client"` components.
+**To render Odyssey in a new view:** use the shared `SettingsViewLayout` (or, for a bespoke shell,
+mount `<OdysseyLoader />` and import the two CSS files — copy the dashboard example's `layout.tsx`).
+Then use `<ody-*>` tags in your `"use client"` components.
 
-## Typing `<ody-*>` elements for React/TSX — mind the TWO declaration files
+## Typing `<ody-*>` elements for React/TSX — one declaration file
 
 Custom elements need JSX typings or TS complains. **This kit augments React's
-`JSX.IntrinsicElements` in _two_ different files**, in two different styles — and that overlap
-has caused a real, silent bug. Know both before you add or edit a type:
+`JSX.IntrinsicElements` in exactly one file: `lib/odyssey/elements.d.ts`.** One element, one
+declaration — no cross-file precedence to reason about.
 
-| File | Style | Role |
-| --- | --- | --- |
-| `app/examples/peek-pro/client/env.d.ts` | `CustomEl<…>` = `DetailedHTMLProps<HTMLAttributes<HTMLElement>, …> & Extra` | **Authoritative.** For any element declared in both files, **this is the declaration that takes effect.** |
-| `types/odyssey-elements.d.ts` | `HTMLAttributes<HTMLElement> & { … }` (richer literal unions, **but no `ref`/`key`** — see below) | Augments the same interface; **loses** to `env.d.ts` for any key they share. |
-
-**These elements are declared in BOTH files** — for them, `env.d.ts` wins:
-`ody-alert`, `ody-button`, `ody-card`, `ody-copy-button`, `ody-divider`, `ody-empty-state`,
-`ody-loading-spinner`, `ody-message`, `ody-status-dot`, `ody-tag`.
-
-**Why it's silent:** `tsconfig.json` has `skipLibCheck: true`, so TS does **not** flag the
-duplicate/conflicting declarations across the two `.d.ts` files. Add an attribute to the *losing*
-file's entry and it compiles cleanly and does **nothing** — the winning declaration is what the
-JSX actually sees. (This is exactly the trap: a prop added to `types/odyssey-elements.d.ts` for,
-say, `ody-button` silently has no effect because `env.d.ts` owns that key.)
+> Earlier this kit split these across two files (`env.d.ts` + `types/odyssey-elements.d.ts`) with
+> overlapping keys. Because `tsconfig.json` sets `skipLibCheck: true`, TS silently let the
+> declarations conflict, and an attribute added to the "losing" file compiled cleanly and did
+> **nothing**. That trap is gone — everything lives in `lib/odyssey/elements.d.ts` now. Keep it
+> that way: **do not** reintroduce a second file that declares `ody-*` keys.
 
 **Rules:**
-- **Never declare the same `ody-*` key in both files.** One element, one home — duplicated keys
-  are the whole problem.
-- **Editing an existing element's attributes?** Change it in the file that actually owns it. If
-  the key is in the overlap list above, that's **`env.d.ts`** — editing the other file won't take.
-  Verify the change landed (the new prop should type-check / autocomplete on the element).
-- **Adding a brand-new element?** Put it in **exactly one** file — prefer `env.d.ts` (the
-  authoritative one) so there's no ambiguity. Example (env.d.ts style):
+- **One home.** Add or edit every `ody-*` element in `lib/odyssey/elements.d.ts`.
+- **Adding a brand-new element?** Add one entry, using the `CustomEl` base:
   ```ts
-  'ody-button': CustomEl<{ variant?: string; disabled?: boolean }>;
+  'ody-button': CustomEl<{ variant?: 'primary' | 'secondary'; disabled?: boolean }>;
   ```
-- Consult the live `ui.md` for that component's real attributes either way.
+- Consult the live `ui.md` for that component's real attributes.
 
 ### Use a base element type that includes `ref` (and `key`)
 
-Type every `<ody-*>` element with the **`CustomEl`** pattern `env.d.ts` already defines — it is
+Type every `<ody-*>` element with the **`CustomEl`** pattern `lib/odyssey/elements.d.ts` already defines — it is
 the correct base, not bare `HTMLAttributes`:
 
 ```ts
@@ -100,8 +91,8 @@ type CustomEl<Extra = object> =
 'ody-datepicker': CustomEl<{ /* scalar attributes… */ }>;
 ```
 
-`DetailedHTMLProps<…>` layers **`ref`** and **`key`** on top of the plain attributes. The bare
-`HTMLAttributes<HTMLElement>` used by `types/odyssey-elements.d.ts` has **neither** — most
+`DetailedHTMLProps<…>` layers **`ref`** and **`key`** on top of the plain attributes. Bare
+`HTMLAttributes<HTMLElement>` has **neither** — most
 importantly, **no `ref`**. That's a real trap: many Odyssey components are driven **through a
 ref** — you set rich array/object props and attach `CustomEvent` listeners on the element
 instance (datepicker, tabs, table, anything with non-scalar props/events; see "Rich data → JS

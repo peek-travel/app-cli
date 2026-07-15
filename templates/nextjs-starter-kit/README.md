@@ -19,7 +19,7 @@ gated on a JWT that only exists in the browser:
    authenticate here (the token can't survive a redirect; cookies are blocked
    in third-party iframes).
 2. The SPA boots and requests its own token from the parent frame via
-   `postMessage` (`app/examples/peek-pro/client/api.ts`). This is the single token
+   `postMessage` (`lib/app-client/api.ts`). This is the single token
    channel — one requester, one listener.
 3. Every API call attaches that token as a Bearer header. Route handlers verify
    it via the auth library and scope the Peek service to the caller's claims
@@ -27,7 +27,7 @@ gated on a JWT that only exists in the browser:
 
 `postMessage` and the iframe embed are **origin-locked** to `peek.com` /
 `peek.stack` (any subdomain depth) — see `frame-ancestors` in `next.config.ts`
-and `isPeekOrigin` in `app/examples/peek-pro/client/api.ts`.
+and `isPeekOrigin` in `lib/app-client/api.ts`.
 
 See `AGENTS.md` for the full constraints (no cookies, no SSR fetch,
 library-owned verification). Read it before changing auth, the embed, or CSP.
@@ -71,9 +71,16 @@ npm run test:coverage
 - `app/examples/peek-pro/main/route.ts` — POST/GET embed entry (redirect only).
 - `app/examples/peek-pro/main/view/` — the embedded SPA (client components).
 - `app/examples/peek-pro/main/api/` — authenticated API routes.
-- `app/examples/peek-pro/client/api.ts` — token handshake + authenticated `apiFetch`.
-- `lib/` — env parsing, JWT verification, Peek service, `with-peek` wrapper.
-- `app.json` — the Peek app manifest (extendables, settings URL, listing).
+- `lib/app-client/api.ts` — token handshake + authenticated `apiFetch`. Shared,
+  brand-agnostic client used by both examples and the dashboard.
+- `app/examples/cng/` — the same example wired to the Connect&GO backoffice
+  (`CngAccessService`) instead of Peek. `app.cng.json` points its settings URL
+  here. Both examples share the one `withAppAuthentication` wrapper.
+- `lib/` — env parsing, JWT verification, the per-platform service factories
+  (`peek-service`, `cng-service`), and `with-app` — the unified auth wrapper that
+  verifies the token then factories the accessor matching its `platform` claim
+  (`app-service.ts`).
+- `app.json` — the app manifest (extendables, settings URL, listing).
 
 ## Deploy
 

@@ -115,7 +115,7 @@ describe("SettingsViewPage", () => {
     capturedEffects[1]?.();
     await Promise.resolve();
     await Promise.resolve();
-    expect(mockApiFetch).toHaveBeenCalledWith("/examples/peek-pro/main/api/me");
+    expect(mockApiFetch).toHaveBeenCalledWith("/examples/cng/main/api/me");
   });
 
   it("does not fetch the user's name before ready", () => {
@@ -192,7 +192,7 @@ describe("SettingsViewPage", () => {
 
     await (button?.props.onClick as () => Promise<void>)();
 
-    expect(mockApiFetch).toHaveBeenCalledWith("/examples/peek-pro/main/api/activities");
+    expect(mockApiFetch).toHaveBeenCalledWith("/examples/cng/main/api/activities");
     expect(setActivities).toHaveBeenCalledWith([
       { id: "a1", name: "Kayaking" },
     ]);

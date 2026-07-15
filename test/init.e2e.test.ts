@@ -5,10 +5,6 @@ import { join } from "node:path";
 import { execa } from "execa";
 
 const CLI = join(import.meta.dirname, "..", "bin", "run.js");
-// PEEK_INIT_TEMPLATE points init at this lightweight fixture instead of the bundled kit,
-// keeping the suite fast and hermetic. It's a test-only seam — there is no user-facing
-// template option.
-const FIXTURE_TEMPLATE = `file:${join(import.meta.dirname, "fixtures", "starter-nextjs")}`;
 
 // The CLI reads auth (session.json) and config (settings.json) from configDir(),
 // which honors XDG_CONFIG_HOME. Point it at a throwaway dir per test so the suite
@@ -39,7 +35,7 @@ describe("peek init", () => {
     await execa(
       CLI,
       ["init", appName, "--platform", "peek", "--no-sync", "--no-dev"],
-      { cwd: workdir, env: cliEnv({ PEEK_INIT_TEMPLATE: FIXTURE_TEMPLATE }) },
+      { cwd: workdir, env: cliEnv() },
     );
 
     const targetDir = join(workdir, appName);
@@ -71,7 +67,7 @@ describe("peek init", () => {
     await execa(
       CLI,
       ["init", "My Cool App!", "--platform", "peek", "--no-install", "--no-sync", "--no-dev"],
-      { cwd: workdir, env: cliEnv({ PEEK_INIT_TEMPLATE: FIXTURE_TEMPLATE }) },
+      { cwd: workdir, env: cliEnv() },
     );
 
     const slugDir = await stat(join(workdir, "my-cool-app"));
@@ -92,7 +88,7 @@ describe("peek init", () => {
     await expect(
       execa(CLI, ["init", appName, "--platform", "peek", "--no-sync", "--no-dev"], {
         cwd: workdir,
-        env: cliEnv({ PEEK_INIT_TEMPLATE: FIXTURE_TEMPLATE }),
+        env: cliEnv(),
       }),
     ).rejects.toThrow();
   });

@@ -130,13 +130,10 @@ export default class Init extends Command {
 
     this.validateSlug(slug, targetDir);
 
-    // Always the starter kit vendored into the CLI. PEEK_INIT_TEMPLATE is a test-only seam
-    // to scaffold from a fixture instead — it is not a user-facing option.
-    const templateSource = process.env.PEEK_INIT_TEMPLATE ?? DEFAULT_TEMPLATE;
-
+    // Always the starter kit vendored into the CLI — there is no user-facing template option.
     const fetchSpinner = p.spinner();
     fetchSpinner.start("Copying the starter kit");
-    await fetchTemplate(templateSource, targetDir);
+    await fetchTemplate(DEFAULT_TEMPLATE, targetDir);
     fetchSpinner.stop("Starter kit ready");
 
     // Starter kit ships a manifest per platform and no plain app.json — materialize the

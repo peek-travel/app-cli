@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { requestToken } from "@/app/examples/peek-pro/client/api";
-import { OdysseyLoader } from "@/app/examples/peek-pro/main/OdysseyLoader";
+import { requestToken } from "@/lib/app-client/api";
+import { OdysseyLoader } from "@/lib/odyssey/OdysseyLoader";
 import "@peektravel/app-utilities/ui/tokens.css";
 import "@peektravel/app-utilities/ui/odyssey.css";
 

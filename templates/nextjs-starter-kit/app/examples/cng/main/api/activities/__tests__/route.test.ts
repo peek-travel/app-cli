@@ -3,10 +3,10 @@ import { NextRequest } from "next/server";
 
 vi.mock("@/lib/with-app", () => ({
   withAppAuthentication: (handler: (...args: unknown[]) => unknown) =>
-    (request: NextRequest) => handler(request, fakePeek),
+    (request: NextRequest) => handler(request, fakeCng),
 }));
 
-const fakePeek = {
+const fakeCng = {
   getAllActivities: vi.fn(),
 };
 
@@ -14,9 +14,9 @@ const { GET } = await import("../route");
 
 describe("GET /api/activities", () => {
   it("maps productId to id for each activity", async () => {
-    fakePeek.getAllActivities.mockResolvedValue([
-      { productId: "prod-1", name: "Kayaking", color: "#0f0", type: "activity" },
-      { productId: "prod-2", name: "Hiking", color: "", type: "activity" },
+    fakeCng.getAllActivities.mockResolvedValue([
+      { productId: "prod-1", name: "Kayaking", color: "#0f0", type: "ACTIVITY" },
+      { productId: "prod-2", name: "Hiking", color: "", type: "ACTIVITY" },
     ]);
 
     const response = await GET(new NextRequest("http://localhost/api/activities"));

@@ -4,10 +4,10 @@ import { NextRequest } from "next/server";
 vi.mock("@/lib/with-app", () => ({
   withAppAuthentication:
     (handler: (...args: unknown[]) => unknown) => (request: NextRequest) =>
-      handler(request, fakePeek, fakeAuth),
+      handler(request, fakeCng, fakeAuth),
 }));
 
-const fakePeek = {};
+const fakeCng = {};
 const fakeAuth = {
   installId: "inst-1",
   displayVersion: "1.0.0",
