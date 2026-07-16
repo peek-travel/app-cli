@@ -1,5 +1,5 @@
-import { cp, readFile, rename, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,11 @@ export const KIT_METADATA_FILE = ".peek-kit.json";
 export const DEFAULT_TEMPLATE = fileURLToPath(
   new URL("../../templates/nextjs-starter-kit", import.meta.url),
 );
+
+// The skills tree (global + per-platform + per-stack) vendored with the CLI. Same ../../ path
+// trick as the template: from both src/lib (tsx dev) and dist/lib (compiled), ../../src/skills
+// lands on the package root's src/skills — which ships via the package.json "files" list.
+export const SKILLS_ROOT = fileURLToPath(new URL("../../src/skills", import.meta.url));
 
 // Files checked for {{APP_NAME}} / {{APP_SLUG}} placeholders. Kept as a small explicit
 // list — no templating engine, just string replace.
@@ -74,11 +79,13 @@ export async function writeKitMetadata(
   targetDir: string,
   source: string,
   platform: string,
+  stack: string,
 ): Promise<void> {
   const metadata = {
     starterKit: basename(source),
     cliVersion: CLI_VERSION,
     platform,
+    stack,
     createdAt: new Date().toISOString(),
   };
   await writeFile(
@@ -104,6 +111,51 @@ export async function selectPlatformManifest(
     );
   }
   await cp(src, dest);
+}
+
+// Pull the `name:` out of a SKILL.md's YAML frontmatter (e.g. `name: peek-embed-and-auth`).
+// Returns null if absent — the caller then falls back to the folder name.
+function readSkillName(skillMd: string): string | null {
+  const match = /^name:[ \t]*(\S+)/m.exec(skillMd);
+  return match ? match[1] : null;
+}
+
+// Compose the app's Claude skill set into <targetDir>/.claude/skills: the generic `global`
+// skills plus the selected platform's and stack's skills. Each skill folder is copied to a
+// directory named after its frontmatter `name` (unique across axes — e.g. global `embed-and-auth`
+// and platform `peek-embed-and-auth` share a folder name at the source but not their skill name),
+// so nothing collides when the three axes are flattened together. A platform or stack with no
+// skills yet (e.g. cng/acme, which ship only a README) simply contributes nothing. Returns the
+// number of skills copied.
+export async function composeSkills(
+  targetDir: string,
+  platform: string,
+  stack: string,
+): Promise<number> {
+  const dest = join(targetDir, ".claude", "skills");
+  const sources = [
+    join(SKILLS_ROOT, "global"),
+    join(SKILLS_ROOT, "platform", platform),
+    join(SKILLS_ROOT, "stack", stack),
+  ];
+
+  await mkdir(dest, { recursive: true });
+
+  let copied = 0;
+  for (const srcDir of sources) {
+    if (!existsSync(srcDir)) continue;
+    for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const skillDir = join(srcDir, entry.name);
+      const skillMd = join(skillDir, "SKILL.md");
+      if (!existsSync(skillMd)) continue; // skip READMEs / non-skill dirs
+
+      const name = readSkillName(await readFile(skillMd, "utf8")) ?? entry.name;
+      await cp(skillDir, join(dest, name), { recursive: true });
+      copied += 1;
+    }
+  }
+  return copied;
 }
 
 export async function substituteTemplateVars(

@@ -7,9 +7,11 @@ import { requireAccount } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
 import { type AppDetails, generateAppDetails, hasClaude, writeAppCopy } from "../lib/claude.js";
 import { PLATFORMS } from "../lib/platforms.js";
+import { STACKS } from "../lib/stacks.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import {
+  composeSkills,
   DEFAULT_TEMPLATE,
   fetchTemplate,
   gitInit,
@@ -51,6 +53,10 @@ export default class Init extends Command {
     platform: Flags.string({
       description: "Platform to develop for",
       options: PLATFORMS.map((pl) => pl.value),
+    }),
+    stack: Flags.string({
+      description: "Tech stack to build on",
+      options: STACKS.map((st) => st.value),
     }),
     goal: Flags.string({
       description:
@@ -125,6 +131,7 @@ export default class Init extends Command {
     }
 
     const platform = await this.resolvePlatform(flags.platform);
+    const stack = await this.resolveStack(flags.stack);
 
     const slug = slugify(appName);
     const targetDir = resolve(process.cwd(), slug);
@@ -142,7 +149,15 @@ export default class Init extends Command {
     await selectPlatformManifest(targetDir, platform);
 
     // Stamp the app with what created it (starter kit + CLI version) before we cd in.
-    await writeKitMetadata(targetDir, DEFAULT_TEMPLATE, platform);
+    await writeKitMetadata(targetDir, DEFAULT_TEMPLATE, platform, stack);
+
+    // Compose the app's Claude skills: generic globals + the selected platform's + stack's
+    // skills, into .claude/skills/. This is how skills reach a scaffolded app now that the
+    // template no longer bundles them.
+    const skillCount = await composeSkills(targetDir, platform, stack);
+    if (skillCount > 0) {
+      p.log.step(`Added ${skillCount} Claude skills (${platform} · ${stack})`);
+    }
 
     // Move into the freshly-scaffolded app dir so the rest of the flow (install, dev server,
     // sync) runs from inside it. targetDir stays absolute, so callers that already pass it
@@ -233,6 +248,22 @@ export default class Init extends Command {
     const answer = await p.select({
       message: "Which platform are you developing for?",
       options: PLATFORMS.map((pl) => ({ value: pl.value, label: pl.label })),
+    });
+
+    if (p.isCancel(answer)) {
+      p.cancel("Cancelled");
+      this.exit(1);
+    }
+
+    return answer as string;
+  }
+
+  private async resolveStack(provided?: string): Promise<string> {
+    if (provided) return provided;
+
+    const answer = await p.select({
+      message: "Which tech stack do you want to build on?",
+      options: STACKS.map((st) => ({ value: st.value, label: st.label })),
     });
 
     if (p.isCancel(answer)) {
