@@ -34,7 +34,7 @@ describe("peek init", () => {
 
     await execa(
       CLI,
-      ["init", appName, "--platform", "peek", "--no-sync", "--no-dev"],
+      ["init", appName, "--platform", "peek", "--stack", "javascript", "--no-sync", "--no-dev"],
       { cwd: workdir, env: cliEnv() },
     );
 
@@ -59,6 +59,13 @@ describe("peek init", () => {
 
     const gitDir = await stat(join(targetDir, ".git"));
     expect(gitDir.isDirectory()).toBe(true);
+
+    // Skills are composed into .claude/skills/ from global + platform/peek + stack/javascript,
+    // each folder named after the skill's frontmatter `name`.
+    for (const skill of ["app-builder", "peek-embed-and-auth", "javascript-nextjs"]) {
+      const skillFile = await stat(join(targetDir, ".claude", "skills", skill, "SKILL.md"));
+      expect(skillFile.isFile()).toBe(true);
+    }
   }, 120_000);
 
   it("coerces a messy app name into a valid slug directory", async () => {
@@ -66,7 +73,7 @@ describe("peek init", () => {
 
     await execa(
       CLI,
-      ["init", "My Cool App!", "--platform", "peek", "--no-install", "--no-sync", "--no-dev"],
+      ["init", "My Cool App!", "--platform", "peek", "--stack", "javascript", "--no-install", "--no-sync", "--no-dev"],
       { cwd: workdir, env: cliEnv() },
     );
 
@@ -82,6 +89,7 @@ describe("peek init", () => {
     const kit = JSON.parse(await readFile(join(workdir, "my-cool-app", ".peek-kit.json"), "utf8"));
     expect(kit.starterKit).toBe("nextjs-starter-kit");
     expect(kit.platform).toBe("peek");
+    expect(kit.stack).toBe("javascript");
     expect(kit.cliVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
@@ -92,7 +100,7 @@ describe("peek init", () => {
     await execa("touch", [join(appName, "existing-file")], { cwd: workdir });
 
     await expect(
-      execa(CLI, ["init", appName, "--platform", "peek", "--no-sync", "--no-dev"], {
+      execa(CLI, ["init", appName, "--platform", "peek", "--stack", "javascript", "--no-sync", "--no-dev"], {
         cwd: workdir,
         env: cliEnv(),
       }),
