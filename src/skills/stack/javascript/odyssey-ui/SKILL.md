@@ -1,23 +1,29 @@
 ---
-name: odyssey-ui
+name: javascript-odyssey-ui
 description: >-
-  Build UI that looks native to Peek Pro using Odyssey, Peek's design system of framework-
-  agnostic <ody-*> web components (from @peektravel/app-utilities). Use when adding or styling
-  any embedded view, rendering Odyssey components in React, wiring the OdysseyLoader, typing a
-  new <ody-*> element, or generating an interactive HTML mockup for design sign-off. Covers the
-  npm vs CDN include paths, the attribute/property/event conventions, and pulling the live
-  component docs. Triggers on "Odyssey", "ody-button", "ody-*", "Peek UI", "component",
-  "style the app", "mockup", "design the view", "JSX.IntrinsicElements", "odyssey-elements.d.ts",
-  "elements.d.ts", "ody-* attribute not working", "custom element typings", "ody-icon", "icon name",
-  "iconNames", "brand icon", "which icons are available".
+  Build UI with Odyssey, the shared app design theme of framework-agnostic <ody-*> web components
+  shipped inside @peektravel/app-utilities. Use when adding or styling any embedded view, rendering
+  Odyssey components in React, wiring the OdysseyLoader, finding icon names, or generating an
+  interactive HTML mockup for design sign-off. Covers the npm vs CDN include paths, the
+  attribute/property/event conventions, the light-DOM slotting gotcha, and pulling the live
+  component docs. For typing <ody-*> elements in TSX, see javascript-typings. Triggers on "Odyssey",
+  "ody-button", "ody-*", "Peek UI", "component", "style the app", "mockup", "design the view",
+  "OdysseyLoader", "ody-icon", "icon name", "iconNames", "brand icon", "which icons are available",
+  "ody-* attribute not working".
 ---
 
-# Odyssey UI — Peek's design system
+# Odyssey UI — the shared design theme
 
-Apps that render UI should use **Odyssey** so they look and feel native to Peek Pro. Odyssey
-ships **framework-agnostic web components** (`<ody-*>` tags) via `@peektravel/app-utilities`.
-They use light DOM, are dependency-free, and work in React (as here), Vue, Angular, Svelte, or
-vanilla HTML. This starter kit already wires them into the embedded views.
+Apps that render UI should use **Odyssey** so they look and feel native to the platform. Odyssey is
+the **shared app design theme**: **framework-agnostic web components** (`<ody-*>` tags) that ship
+inside **`@peektravel/app-utilities`** (see `javascript-app-utilities`). They use light DOM, are
+dependency-free, and work in React (as here), Vue, Angular, Svelte, or vanilla HTML. This starter
+kit already wires them into the embedded views.
+
+> **Provenance:** Odyssey is **Peek-derived** and is **rolling out as the shared theme across the
+> other platforms** (cng, acme); it **may fork per-platform later**. For now treat it as the one
+> shared theme for every JS-stack app — a cng/acme app on this stack uses the same components until
+> a platform-specific fork actually exists.
 
 ## Always load the live component docs first
 
@@ -28,14 +34,14 @@ current docs before building UI:
 https://cdn.jsdelivr.net/npm/@peektravel/app-utilities/docs/ui.md
 ```
 
-It lists every component, its tag, attributes, and usage conventions. (Intentionally kept out
-of this skill so it can't go stale.)
+(Or read the installed copy's `docs/ui.md` / `dist/ui/index.d.ts` — see `javascript-app-utilities`
+for introspecting the package.) `ui.md` lists every component, its tag, attributes, and usage
+conventions. It is intentionally kept out of this skill so it can't go stale.
 
 ## How this starter kit includes Odyssey (npm — the default)
 
-The embedded views load Odyssey through the npm package, in two pieces:
-
-Both pieces live in the shared `lib/odyssey/` module (used by every example — peek-pro, cng, …):
+The embedded views load Odyssey through the npm package, in two pieces. Both live in the shared
+`lib/odyssey/` module (used by every example — peek-pro, cng, …):
 
 1. **CSS + registration, in the shared view shell** (`lib/odyssey/SettingsViewLayout.tsx`):
    ```ts
@@ -46,9 +52,8 @@ Both pieces live in the shared `lib/odyssey/` module (used by every example — 
    Each example's `app/.../main/view/layout.tsx` just re-exports this shell, so Next still finds a
    layout in the route tree.
 2. **Component registration, client-side only** — via `OdysseyLoader`
-   (`lib/odyssey/OdysseyLoader.tsx`), which dynamically imports the elements in a
-   `useEffect` so custom elements upgrade **after** React hydration (avoiding hydration
-   mismatches):
+   (`lib/odyssey/OdysseyLoader.tsx`), which dynamically imports the elements in a `useEffect` so
+   custom elements upgrade **after** React hydration (avoiding hydration mismatches):
    ```ts
    'use client';
    useEffect(() => { import('@peektravel/app-utilities/ui'); }, []);
@@ -58,53 +63,9 @@ Both pieces live in the shared `lib/odyssey/` module (used by every example — 
 mount `<OdysseyLoader />` and import the two CSS files — copy the dashboard example's `layout.tsx`).
 Then use `<ody-*>` tags in your `"use client"` components.
 
-## Typing `<ody-*>` elements for React/TSX — one declaration file
-
-Custom elements need JSX typings or TS complains. **This kit augments React's
-`JSX.IntrinsicElements` in exactly one file: `lib/odyssey/elements.d.ts`.** One element, one
-declaration — no cross-file precedence to reason about.
-
-> Earlier this kit split these across two files (`env.d.ts` + `types/odyssey-elements.d.ts`) with
-> overlapping keys. Because `tsconfig.json` sets `skipLibCheck: true`, TS silently let the
-> declarations conflict, and an attribute added to the "losing" file compiled cleanly and did
-> **nothing**. That trap is gone — everything lives in `lib/odyssey/elements.d.ts` now. Keep it
-> that way: **do not** reintroduce a second file that declares `ody-*` keys.
-
-**Rules:**
-- **One home.** Add or edit every `ody-*` element in `lib/odyssey/elements.d.ts`.
-- **Adding a brand-new element?** Add one entry, using the `CustomEl` base:
-  ```ts
-  'ody-button': CustomEl<{ variant?: 'primary' | 'secondary'; disabled?: boolean }>;
-  ```
-- Consult the live `ui.md` for that component's real attributes.
-
-### Use a base element type that includes `ref` (and `key`)
-
-Type every `<ody-*>` element with the **`CustomEl`** pattern `lib/odyssey/elements.d.ts` already defines — it is
-the correct base, not bare `HTMLAttributes`:
-
-```ts
-type CustomEl<Extra = object> =
-  React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & Extra;
-
-// e.g.
-'ody-datepicker': CustomEl<{ /* scalar attributes… */ }>;
-```
-
-`DetailedHTMLProps<…>` layers **`ref`** and **`key`** on top of the plain attributes. Bare
-`HTMLAttributes<HTMLElement>` has **neither** — most
-importantly, **no `ref`**. That's a real trap: many Odyssey components are driven **through a
-ref** — you set rich array/object props and attach `CustomEvent` listeners on the element
-instance (datepicker, tabs, table, anything with non-scalar props/events; see "Rich data → JS
-properties" below). Type such an element with bare `HTMLAttributes` and `<ody-datepicker ref={r}>`
-has **no typed `ref`** — an error that can **slip past a local/incremental `tsc` yet fail the next
-clean build** (e.g. Next's `.next/types` regeneration in CI). Always use `CustomEl` so `ref`/`key`
-are present, regardless of whether the element takes rich props today.
-
-> **Validate JSX / custom-element typings with a real `next build`, not just `tsc`.** In practice
-> `tsc --noEmit` passed while `next build` **failed** on exactly this `ref` typing — Next
-> regenerates `.next/types` and type-checks the app in its own pass, so it catches errors a bare
-> `tsc` misses. After any `<ody-*>` typing change, run `next build` (or let CI) before trusting it.
+> **Typing `<ody-*>` for React/TSX** (augmenting `JSX.IntrinsicElements`, the `CustomEl` base, the
+> one-declaration-file rule, and validating with a real `next build`) is its own concern — see
+> **javascript-typings**. That's generic custom-element typing; Odyssey is its primary consumer.
 
 ## Usage conventions (from ui.md)
 
@@ -120,8 +81,8 @@ are present, regardless of whether the element takes rich props today.
 
 ## Finding icon names (`<ody-icon>` and `<ody-brand-icon>`)
 
-Odyssey ships **two** icon sets, each with its own element and lookup function (both documented
-in `@peektravel/app-utilities`'s `dist/ui/index.d.ts` and `docs/ui.md`):
+Odyssey ships **two** icon sets, each with its own element and lookup function (both documented in
+`@peektravel/app-utilities`'s `dist/ui/index.d.ts` and `docs/ui.md`):
 
 - **Themeable line icons** — `<ody-icon name="…">`; names via **`iconNames()`** (also `iconSvg`,
   `hasIcon`). They render in `currentColor`.
@@ -160,13 +121,13 @@ between versions (v0.2.5 has ≈175 names across both sets, ≈53 of them brand 
 
 These are **light-DOM** components: some (notably container/layout ones like `ody-two-column`,
 `ody-two-column-secondary`, `ody-panel`, `ody-modal`) slot their child nodes **once, when the
-element upgrades**, and do **not** re-slot children a framework appends *afterward*. So a child
-you render **conditionally** (`{open && <Detail/>}`) directly inside such a component can stay
+element upgrades**, and do **not** re-slot children a framework appends *afterward*. So a child you
+render **conditionally** (`{open && <Detail/>}`) directly inside such a component can stay
 **invisible** — the element upgraded with that child absent and never picked it up.
 
-The tell: content that's present on first render works, but content added later (on click, after
-a fetch, on selection) shows up in React's tree yet never appears on screen. Lint/typecheck/tests
-all pass — this only reproduces in a real browser.
+The tell: content that's present on first render works, but content added later (on click, after a
+fetch, on selection) shows up in React's tree yet never appears on screen. Lint/typecheck/tests all
+pass — this only reproduces in a real browser.
 
 **Rule: give the component a stable child that's present from the first render, and let your
 framework mutate *inside* it.** Wrap dynamic/conditional content in a plain `<div>`:
@@ -190,15 +151,15 @@ rows, is what the component slots.) Toggling **attributes** on these components 
 `secondary-open`) is fine; it's dynamically-added **children** that need the wrapper.
 
 > The component list above is illustrative, not exhaustive — it was diagnosed from symptoms, not
-> the Odyssey source. If a given container component *does* observe late-added children (e.g. via
-> a `MutationObserver`/slot), it won't have this problem; when in doubt, verify in a real browser.
+> the Odyssey source. If a given container component *does* observe late-added children (e.g. via a
+> `MutationObserver`/slot), it won't have this problem; when in doubt, verify in a real browser.
 
 ## Theming / tokens
 
-Override design tokens in CSS rather than hardcoding brand colors:
-`--color-<name>-<shade>` (e.g. `--color-interaction-300`), typography `--ody-font-family` /
-`--ody-font-weight-*`, layout `--layout-top-bar-height`, `--ody-shadow-base`. Some components
-accept inline color via attributes (e.g. `bar-color="var(--color-success-300)"`).
+Override design tokens in CSS rather than hardcoding brand colors: `--color-<name>-<shade>` (e.g.
+`--color-interaction-300`), typography `--ody-font-family` / `--ody-font-weight-*`, layout
+`--layout-top-bar-height`, `--ody-shadow-base`. Some components accept inline color via attributes
+(e.g. `bar-color="var(--color-success-300)"`).
 
 ## The mockup workflow (step 2 of the build)
 
@@ -208,27 +169,31 @@ Before building the real UI, make the design concrete with an **interactive sing
 1. Copy `mockup-template.html` (in this folder) into the project as `index.html`. It wires the
    **CDN** Odyssey includes (mockups are standalone, so CDN — not the npm package) and scaffolds
    `<ody-page-container>` + an `<ody-tabs>` variant area.
-2. Build the proposed UI in it from what you've learned; tell the user to open it in a browser
-   and react.
+2. Build the proposed UI in it from what you've learned; tell the user to open it in a browser and
+   react.
 3. Collect feedback one question at a time; revise. **When unsure about a layout/flow, render
-   multiple variants in the *same* file** (wrap each in a tab) so the user compares directly,
-   then collapse to the chosen direction.
+   multiple variants in the *same* file** (wrap each in a tab) so the user compares directly, then
+   collapse to the chosen direction.
 4. Repeat until satisfied — the agreed mockup feeds the real build.
 
-> If `ui.md` is unreachable, say so and fall back to clean, neutral, accessible HTML — do
-> **not** invent `ody-*` attributes; re-skin with Odyssey later.
+> If `ui.md` is unreachable, say so and fall back to clean, neutral, accessible HTML — do **not**
+> invent `ody-*` attributes; re-skin with Odyssey later.
 
 ## Still open / `TODO(verify)`
 
 - Brand assets beyond the component set (logo usage), and any layout conventions specific to
   embedded vs. admin surfaces.
-- Accessibility requirements Peek mandates for published apps.
+- Accessibility requirements the platform mandates for published apps.
+- Whether/when Odyssey forks per-platform (peek vs. cng vs. acme) — treat as one shared theme until
+  it does.
 
 ## Related skills
 
-- **peek-embed-and-auth** — the SPA gate the views render inside; where `OdysseyLoader` and the
-  layouts live.
-- **peek-app-builder** — step 2 (mockup) and step 5 (build the real UI) both drive this skill.
+- **javascript-app-utilities** — the SDK package Odyssey ships inside; how to introspect it for the
+  live component docs and icon helpers.
+- **javascript-typings** — typing `<ody-*>` elements for React/TSX (the material this skill points
+  to for JSX/`CustomEl`).
+- **app-builder** — step 2 (mockup) and step 5 (build the real UI) both drive this skill.
 
 ## Artifacts in this folder
 
