@@ -3,9 +3,11 @@ import type { PeekAuthTokenClaims } from '@peektravel/app-utilities';
 
 const mockCreatePeekService = vi.fn();
 const mockCreateCngService = vi.fn();
+const mockCreateAcmeService = vi.fn();
 
 vi.mock('@/lib/peek-service', () => ({ createPeekService: mockCreatePeekService }));
 vi.mock('@/lib/cng-service', () => ({ createCngService: mockCreateCngService }));
+vi.mock('@/lib/acme-service', () => ({ createAcmeService: mockCreateAcmeService }));
 
 const { createAppService } = await import('../app-service');
 
@@ -45,7 +47,14 @@ describe('createAppService', () => {
     expect(mockCreatePeekService).not.toHaveBeenCalled();
   });
 
-  it('throws for a platform with no accessor', () => {
-    expect(() => createAppService(claimsFor('acme'))).toThrow(/acme/);
+  it('builds an ACME service for the acme platform', () => {
+    const acme = {} as never;
+    mockCreateAcmeService.mockReturnValue(acme);
+    const claims = claimsFor('acme');
+
+    expect(createAppService(claims)).toBe(acme);
+    expect(mockCreateAcmeService).toHaveBeenCalledWith(claims);
+    expect(mockCreatePeekService).not.toHaveBeenCalled();
+    expect(mockCreateCngService).not.toHaveBeenCalled();
   });
 });

@@ -1,29 +1,22 @@
 import {
+  type AcmeAccessService,
   type CngAccessService,
   type PeekAccessService,
   type PeekAuthTokenClaims,
 } from "@peektravel/app-utilities";
+import { createAcmeService } from "@/lib/acme-service";
 import { createCngService } from "@/lib/cng-service";
 import { createPeekService } from "@/lib/peek-service";
 
 /**
  * Every backoffice accessor a route can be handed. One deployment of this app is
- * embedded into multiple platforms (Peek, Connect&GO, ...), so the accessor type
- * is only known per-request, from the token's platform claim.
+ * embedded into multiple platforms (Peek, Connect&GO, ACME, ...), so the
+ * accessor type is only known per-request, from the token's platform claim.
  */
-export type AppAccessService = PeekAccessService | CngAccessService;
-
-/**
- * TODO: remove once @peektravel/app-utilities ships the `platform` claim (added
- * after 0.3.0). Bridges the type locally so this compiles against the pinned
- * dependency; delete when the package is bumped.
- */
-declare module "@peektravel/app-utilities" {
-  interface PeekAuthTokenUser {
-    /** Which platform embedded the app for this session. */
-    platform: "peek" | "cng" | "acme";
-  }
-}
+export type AppAccessService =
+  | PeekAccessService
+  | CngAccessService
+  | AcmeAccessService;
 
 /**
  * Factory the backoffice accessor that matches the platform the caller
@@ -39,9 +32,9 @@ export function createAppService(auth: PeekAuthTokenClaims): AppAccessService {
       return createPeekService(auth);
     case "cng":
       return createCngService(auth);
+    case "acme":
+      return createAcmeService(auth);
     default:
-      // acme has no accessor in the library yet; auth-only routes still work,
-      // routes that need a service will surface this until one lands.
       throw new Error(`No app service for platform: ${auth.user.platform}`);
   }
 }

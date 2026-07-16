@@ -13,7 +13,7 @@
         "display_version": "0.0.1",
         "tags": [],
         "base_url": "https://example.com",
-        "platforms": ["peek"],
+        "platforms": ["acme"],
         "listing_md": {
           "en": "**{{APP_NAME}}** brings powerful new capabilities right into your Peek Pro backoffice — no extra logins, no switching tabs.\n\n### Why you'll love it\n\n- **Works where you do** — runs inside Peek Pro, so your team gets started in seconds.\n- **Always in sync** — securely connects to your Peek Pro data automatically.\n- **Built for your workflow** — flexible settings to match how you run your business.\n\n### How it works\n\n1. Click **Install** to add to your account.\n2. Open it from *Settings* inside Peek Pro.\n3. You're up and running — that's it.\n\n### Questions?\n\nWe're here to help. Reach out anytime and we'll get you sorted.\n\nReady? Hit **Install** to get started. 🚀"
         },
@@ -26,7 +26,7 @@
           "acme": [
             {
               "configuration": {
-                "permissions": []
+                "permissions": ["products:read"]
               },
               "slug": "acme_backoffice_api@v1"
             }
@@ -36,7 +36,7 @@
         "registry_extendables": [
           {
             "configuration": {
-              "url": "/examples/peek-pro/main",
+              "url": "/examples/acme/main",
               "url_mode": "prepend_base_url"
             },
             "slug": "app_registry_settings_url@v1"
