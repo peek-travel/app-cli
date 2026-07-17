@@ -4,7 +4,7 @@ description: >-
   The concrete Peek MCP endpoint — how a starter-kit app exposes its functionality as MCP tools so
   the Peek Pro App Store's AI orchestrator can drive it without opening the UI. Use when adding or
   changing the app's MCP endpoint, wiring its auth, or declaring it in app.json. Covers reusing
-  withPeekAuthentication (the same peek-auth token as the UI), the tools/list + tools/call route
+  withAppAuthentication (the same peek-auth token as the UI), the tools/list + tools/call route
   shape, the tools module pattern, declaring the endpoint in app.json, and the Peek-specific stack
   flags (PeekAccessService is Node-only → Node runtime not Edge). Triggers on "MCP", "MCP
   endpoint", "expose tools", "tools/list", "tools/call", "App Store AI", "headless access",
@@ -28,25 +28,25 @@ without opening each app's iframe UI.
 > method), get it from the installed `@peektravel/app-utilities` package or the live doc
 > (`javascript-app-utilities`), and `TODO(verify)` what isn't pinned.
 
-## Same authentication as the UI — reuse `withPeekAuthentication`
+## Same authentication as the UI — reuse `withAppAuthentication`
 
 The MCP endpoint authenticates **exactly like every UI API route**: a short-lived peek-auth JWT in
 the `x-peek-auth: Bearer <token>` header, verified library-side, yielding an install-scoped
 `PeekAccessService`. The only difference from the UI is *who holds the token*: the browser SPA
 gets it from the parent frame via `postMessage`; the **AI orchestrator obtains its own peek-auth
 token for the install and sends it on the same header**. Acquiring the token is the caller's
-problem — your endpoint just verifies it. So **reuse `withPeekAuthentication`** (see
-`peek-embed-and-auth`); do not build a second auth scheme, an API key, or a bearer of your own.
+problem — your endpoint just verifies it. So **reuse `withAppAuthentication<PeekAccessService>`**
+(see `peek-embed-and-auth`); do not build a second auth scheme, an API key, or a bearer of your own.
 
 ```ts
 // app/examples/peek-pro/mcp/route.ts
 import { type NextRequest, NextResponse } from 'next/server';
 import { type PeekAccessService } from '@peektravel/app-utilities';
-import { withPeekAuthentication } from '@/lib/with-peek';
+import { withAppAuthentication } from '@/lib/with-app';
 import { MCP_TOOLS, callTool } from './tools';
 
 // The endpoint is just another authenticated route — same verification as the UI.
-export const POST = withPeekAuthentication(
+export const POST = withAppAuthentication<PeekAccessService>(
   async (request: NextRequest, peek: PeekAccessService) => {
     const req = await request.json();
 
@@ -153,7 +153,7 @@ MCP-specific assertions:
 
 ## Hard rules
 
-- **Same auth as the UI — reuse `withPeekAuthentication`.** No second auth scheme, no API keys.
+- **Same auth as the UI — reuse `withAppAuthentication`.** No second auth scheme, no API keys.
 - **Install-scoped only.** Build tools from the *verified token's* claims (the `peek` client you
   were handed). A tool must never read or act outside its install scope.
 - **Share logic with the UI; never fork it.** Tools call the same functions the UI routes call.
@@ -167,7 +167,7 @@ MCP-specific assertions:
 
 - **`mcp-endpoint`** (global) — the generic expose-to-the-store-AI / reuse-UI-auth / curate-the-
   surface philosophy (don't re-derive it here).
-- **`peek-embed-and-auth`** — the auth pipeline (`withPeekAuthentication`, `requirePeekAuth`,
+- **`peek-embed-and-auth`** — the auth pipeline (`withAppAuthentication`, `requirePeekAuth`,
   `verifyPeekAuthToken`) the endpoint reuses verbatim.
 - **`peek-backoffice-api`** — what `PeekAccessService` (`peek`) can do inside a tool handler, plus
   ID normalization, `installDataId` scoping, and PII rules for tool I/O.
