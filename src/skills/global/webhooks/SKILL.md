@@ -29,11 +29,13 @@ guess. See `peek-webhooks` for where the canonical platform's event docs live.
 ## Two halves that must agree
 
 1. **Registration (external — the platform's config / registry).** You declare the webhook, its
-   **target endpoint URL**, and its **payload spec** in the app's platform configuration. The
-   payload spec can be a fixed format or, for richer events, a field selection you provide that
+   **target endpoint URL**, and its **payload spec** in the app's manifest via a webhook extension —
+   the install/uninstall `app_registry_webhook@v1` and/or a booking-event `webhook_on_…` extension.
+   The payload spec can be a fixed format or, for richer events, a field selection you provide that
    shapes the delivery. Registration and your parsing **must agree** on the shape. The exact config
-   keys live in the platform's live doc — pull them, don't bake. See `manifest-and-deploy` for where
-   the endpoint URL is declared.
+   keys live in the platform's live doc — pull them, don't bake. Enumerate the available webhook
+   extensions and read each one's required config with the CLI (`extensions list` / `extensions
+   show <slug>` — see `cli`); see `manifest-and-deploy` for where the endpoint URL is declared.
 2. **The endpoint (you implement it).** The platform POSTs the event to a route your app exposes.
    Build it following your stack's route conventions (see `javascript-nextjs`), and parse the
    delivery with the platform SDK's parser functions rather than reading raw JSON where the platform
@@ -87,5 +89,7 @@ so keys match (see `backoffice-data`). The exact ID fields and formats are platf
 - `embed-and-auth` — the *other* inbound path (the user-token API); contrast the auth models so you
   don't confuse them, and the server-to-host client you build from the delivery's install id.
 - `javascript-nextjs` — the route-handler mechanics for the endpoint.
+- `cli` — list the webhook extensions available for the platform and read each one's manifest config
+  (`app_registry_webhook@v1`, `webhook_on_…`).
 - `manifest-and-deploy` — where the webhook endpoint URL is declared for the app.
 - `testing` — testing the "state not change" derivation and delivery verification.
