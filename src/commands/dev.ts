@@ -1,14 +1,15 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Command, Flags } from "@oclif/core";
+import { Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
 import { detectPackageManager } from "../lib/pm.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 
-export default class Dev extends Command {
+export default class Dev extends BaseCommand {
   static description =
     "Run the app behind a public Cloudflare tunnel, syncing the tunnel URL to the registry";
 

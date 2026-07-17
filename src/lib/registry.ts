@@ -69,6 +69,14 @@ export function clearRegistryOverride(): void {
   writeSettings(settings);
 }
 
+// A per-invocation opt-out, set by the global --skip-env-confirm flag (see BaseCommand).
+// Unlike a persisted setting it never outlives the process — every run must pass the flag.
+let sessionSkipConfirm = false;
+
+export function skipEnvConfirmForSession(): void {
+  sessionSkipConfirm = true;
+}
+
 // Once the developer confirms the override in a given CLI invocation, we don't
 // ask again for the rest of that process — a single flow (init → serve → sync)
 // touches the registry many times and re-prompting each hop is noise.
@@ -82,6 +90,16 @@ export async function confirmRegistryOverride(): Promise<void> {
   if (overrideConfirmed) return;
 
   const url = getRegistryUrl();
+
+  // The global --skip-env-confirm flag lets a scripted/long local session (init → dev → sync)
+  // proceed without prompting on every registry hop. Still surface the warning so it's never
+  // invisible that we're pointed off production.
+  if (sessionSkipConfirm) {
+    p.log.warn(`Registry overridden: ${url} (auto-confirmed via --skip-env-confirm). This is NOT production.`);
+    overrideConfirmed = true;
+    return;
+  }
+
   p.log.warn(
     `Registry overridden: ${url}\nThis is NOT production. Run "peek set-env --clear" to reset.`,
   );

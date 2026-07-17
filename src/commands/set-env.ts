@@ -1,11 +1,12 @@
-import { Args, Command, Flags } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { clearRegistryOverride, getRegistryUrl, setRegistryOverride } from "../lib/registry.js";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
-export default class SetEnv extends Command {
+export default class SetEnv extends BaseCommand {
   static description = "Override the registry URL the CLI talks to (registry developers only)";
   static hidden = true;
 

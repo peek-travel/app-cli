@@ -1,5 +1,6 @@
-import { Command, Flags } from "@oclif/core";
+import { Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../../base-command.js";
 import { CLIError } from "../../errors.js";
 import { ensureLoggedIn } from "../../lib/auth.js";
 import { listExtensions, platformsSummary } from "../../lib/extensions.js";
@@ -7,7 +8,7 @@ import { PLATFORM_VALUES, platformLabel } from "../../lib/platforms.js";
 import { confirmRegistryOverride } from "../../lib/registry.js";
 import { failure } from "../../lib/ui.js";
 
-export default class ExtensionsList extends Command {
+export default class ExtensionsList extends BaseCommand {
   static description = "List the extensions (extendables) available to apps in the registry";
 
   static examples = [

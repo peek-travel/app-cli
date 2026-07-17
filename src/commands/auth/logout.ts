@@ -1,8 +1,8 @@
-import { Command } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../../base-command.js";
 import { clear, isLoggedIn } from "../../lib/session.js";
 
-export default class AuthLogout extends Command {
+export default class AuthLogout extends BaseCommand {
   static description = "Sign out of the Peek app registry";
 
   async run(): Promise<void> {

@@ -1,12 +1,13 @@
-import { Args, Command, Flags } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { syncApp } from "../lib/sync.js";
 import { failure } from "../lib/ui.js";
 
-export default class SyncApp extends Command {
+export default class SyncApp extends BaseCommand {
   static description = "Sync an app.json to the Peek app registry";
 
   static args = {

@@ -1,10 +1,10 @@
-import { Command } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../../base-command.js";
 import { fetchUserEmail } from "../../lib/auth.js";
 import { getRegistryUrl } from "../../lib/registry.js";
 import { isLoggedIn } from "../../lib/session.js";
 
-export default class AuthWhoami extends Command {
+export default class AuthWhoami extends BaseCommand {
   static description = "Show which account you're signed in as, and against which registry";
 
   async run(): Promise<void> {

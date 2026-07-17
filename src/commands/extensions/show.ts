@@ -1,5 +1,6 @@
-import { Args, Command, Flags } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../../base-command.js";
 import { CLIError } from "../../errors.js";
 import { ensureLoggedIn } from "../../lib/auth.js";
 import {
@@ -41,7 +42,7 @@ function renderNode(node: FieldNode, depth: number, out: string[]): void {
   for (const child of node.children) renderNode(child, depth + 1, out);
 }
 
-export default class ExtensionsShow extends Command {
+export default class ExtensionsShow extends BaseCommand {
   static description = "Show details for a single extension (extendable) by slug";
 
   static examples = [
