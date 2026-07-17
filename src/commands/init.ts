@@ -1,7 +1,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { Args, Command, Flags } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { requireAccount } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
@@ -40,7 +41,7 @@ function slugify(name: string): string {
   return SLUG_RE.test(slug) ? slug : `app-${slug}`.replace(/-+$/, "");
 }
 
-export default class Init extends Command {
+export default class Init extends BaseCommand {
   static description = "Scaffold a new Peek app from a starter template";
 
   static args = {

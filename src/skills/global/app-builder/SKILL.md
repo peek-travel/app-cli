@@ -81,6 +81,10 @@ that a method, resource, or field is available — introspect the installed pack
 - **The capability boundary** for your platform (which client it exposes, what it *can't* do,
   whether a GraphQL-style escape-hatch exists): your platform's back-office skill —
   `peek-backoffice-api` is the canonical example.
+- **Which registry extensions the app can declare** for the selected platform (the settings/embed
+  URL, install/uninstall webhook, per-event booking webhooks): the CLI — `npx @peektravel/app-cli
+  extensions list --platform <platform>`. If a feature depends on an extension not listed for the
+  platform, it can't ship — flag it. See **`cli`**.
 
 Any needed capability you can't confirm in the installed SDK is a `TODO(verify)` that **must** be
 resolved before sign-off — find the real capability or change the design. A plan built on a
@@ -105,7 +109,7 @@ anything differently (skip, reorder, re-emphasize). Then begin.
 | 3. **Plan** | Map the **data flow** as rigorously as the UI (source → when → storage → **verified available in the installed SDK?**), pick which webhooks vs. SDK calls, note per-install data scoping if persistence is added. Close the capability gate: every needed capability confirmed present for the selected platform. Write it up using `plan-template.md`. | all the generic skills + your platform's + stack's skills + the installed package + web |
 | 4. **Sign-off (hard gate)** | Present the plan; get an explicit "yes, build this." Call out anything you **couldn't verify** (`TODO(verify)`). **Do not build before this.** | — |
 | 5. **Build** | Implement per the plan: new authenticated routes + client fetches, webhook endpoints, the **MCP endpoint (by default)**, UI, tests as you go. | `embed-and-auth`, `backoffice-data`, `webhooks`, `mcp-endpoint`, `testing` + your platform's + stack's skills |
-| 6. **Validate & ship** | Run lint/typecheck/tests + coverage; **have the user run the app under the platform framework** (local tunnel or deploy — see below) so the embed actually loads; confirm secrets/PII handling; **hand the user their production env-var checklist** (see below); register in the platform's developer hub and deploy. | `testing`, `manifest-and-deploy` |
+| 6. **Validate & ship** | Run lint/typecheck/tests + coverage; **have the user run the app under the platform framework** (local tunnel or deploy — see below) so the embed actually loads; confirm secrets/PII handling; **hand the user their production env-var checklist** (see below); register in the platform's developer hub and deploy. | `cli` (run locally via `dev`), `testing`, `manifest-and-deploy` |
 
 Don't skip discovery/mockup, and **don't build before sign-off (step 4)**.
 
@@ -128,7 +132,8 @@ credentials and an app-store-registered tunnel. So when it's time to see the app
   ```
   This spins up a **local tunnel and registers it with the app store**, so the platform can embed
   the local app in the real host frame with real auth. This is the correct "dev server" for this
-  kit — not the plain framework dev server.
+  kit — not the plain framework dev server. See **`cli`** for the full CLI (the preflight checks —
+  is it on production? is the user logged in? — and what `dev` does to the manifest).
 - **Deploy it** — ship to the host and exercise it as an installed app. See `manifest-and-deploy`.
 
 What you *can* do without the framework: lint, typecheck, and the test suite (auth logic, webhook
@@ -218,7 +223,7 @@ reaches the user.
 
 ## Related skills
 
-Generic: `embed-and-auth` · `backoffice-data` · `webhooks` · `mcp-endpoint` ·
+Generic: `cli` · `embed-and-auth` · `backoffice-data` · `webhooks` · `mcp-endpoint` ·
 `manifest-and-deploy` · `testing`. Then link down to **your platform's** skills (the canonical
 example set: `peek-embed-and-auth`, `peek-backoffice-api`, `peek-webhooks`, `peek-mcp-endpoint`,
 `peek-manifest-and-deploy`) and **your stack's** skills (on JS: `javascript-app-utilities`,

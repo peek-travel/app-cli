@@ -10,7 +10,7 @@ description: >-
   without a user token, and the file map that owns each piece. Triggers on "add an API route",
   "authenticate a request", "peek-auth token", "iframe won't load", "401 in the embed",
   "postMessage token", "call Peek without a user token", "createPeekServiceForInstall",
-  "cron/background Peek", "withPeekAuthentication".
+  "cron/background Peek", "withAppAuthentication", "withPeekAuthentication".
 ---
 
 # Peek Pro embed & auth pipeline
@@ -20,8 +20,8 @@ owns identity, verify server-side, never build your own login, scope to an insta
 `embed-and-auth`; read that for the *why*. This skill is the authoritative map of *how Peek does
 it*, and the recipe for extending it.
 
-> Read this before touching anything under `app/examples/peek-pro/`, `lib/with-peek.ts`,
-> `lib/api-auth.ts`, `lib/peek-service.ts`, or `lib/app-client/`. The Next.js route-handler /
+> Read this before touching anything under `app/examples/peek-pro/`, `lib/with-app.ts`,
+> `lib/with-peek.ts`, `lib/api-auth.ts`, `lib/peek-service.ts`, or `lib/app-client/`. The Next.js route-handler /
 > `"use client"` SPA mechanics (why there's no SSR data fetch, no `react-dom/server`) are a
 > **stack** concern — see `javascript-nextjs`. Here we cover the peek-auth token, the handshake,
 > and the install scoping.
@@ -49,13 +49,34 @@ without a user token — you can, install-scoped, from any server context that h
 5. Token cached in memory; the view renders only AFTER it arrives (the "ready" gate)
 6. Each data call goes to an API route with header  x-peek-auth: Bearer <token>   (apiFetch)
 7. The route verifies the token and builds an install-scoped Peek client:
-       withPeekAuthentication → requirePeekAuth → verifyPeekAuthToken → createPeekService
+       withAppAuthentication → requirePeekAuth → verifyPeekAuthToken → createAppService → createPeekService
 8. On 401, apiFetch requests a fresh token via the SAME channel and retries once
 ```
 
 The two message types are Peek-specific: **`peek-iframe-token-refresh`** (SPA → parent, "give me
 a token") and **`peek-token-response`** (parent → SPA, `{ token }`). The 401-refresh path in step
 8 reuses that *same* channel — it's a refresh, not a second bootstrap.
+
+### The auth wrapper — `withAppAuthentication`, verify once then branch on platform
+
+Because one deployment can be embedded into multiple platforms (Peek, cng, acme), the current
+wrapper is the **brand-agnostic `withAppAuthentication`** (`lib/with-app.ts`): it verifies the
+peek-auth JWT once (via `requirePeekAuth`), then `createAppService` (`lib/app-service.ts`) factories
+the accessor matching the token's `user.platform` claim — for Peek that's the `case "peek"` branch
+→ `createPeekService`. A route lives under exactly one platform's tree, so name the concrete
+accessor at the call site and skip runtime narrowing:
+
+```ts
+export const GET = withAppAuthentication<PeekAccessService>(
+  async (_request, peek) => { /* peek is a PeekAccessService */ },
+);
+```
+
+A **peek-only** wrapper, `withPeekAuthentication` (`lib/with-peek.ts`), also still ships — it skips
+the platform branch and always builds a `PeekAccessService` (the `dashboard` example uses it). For a
+single-platform Peek app the two are equivalent; **new code should prefer `withAppAuthentication`**
+so the same app can be embedded into cng/acme without rewiring auth. Everything below applies to
+both — only the wrapper name and the (skipped vs. taken) platform branch differ.
 
 ### Why the POST route throws the token away
 `app/examples/peek-pro/main/route.ts` does **not** authenticate. `page.tsx` can't receive POST,
@@ -163,7 +184,9 @@ JS SDK — see `javascript-app-utilities` for the package/paths.
 | Embed entry (POST→redirect) | `app/examples/peek-pro/main/route.ts` | Converts Peek's POST into a 302 to the view. Ignores the token by design. |
 | Token handshake + fetch helper | `lib/app-client/api.ts` | `requestToken()` (the single `peek-iframe-token-refresh` channel) and `apiFetch()` (Bearer + 401-refresh-retry). |
 | The SPA bootstrap gate | `app/examples/peek-pro/main/view/layout.tsx` + `page.tsx` | Loads Odyssey, calls `requestToken()`, renders children only once `ready`. |
-| Server-side auth wrapper | `lib/with-peek.ts` | `withPeekAuthentication(handler)` — wraps a route so it receives a verified `PeekAccessService` + claims. |
+| Unified server-side auth wrapper | `lib/with-app.ts` | `withAppAuthentication<T>(handler)` — verify once, branch on `platform`, hand the route its accessor (`PeekAccessService` for Peek). The current default. |
+| Platform branch | `lib/app-service.ts` | `createAppService(auth)` — maps `auth.user.platform` → the right accessor (`createPeekService` for Peek). |
+| Peek-only auth wrapper | `lib/with-peek.ts` | `withPeekAuthentication(handler)` — skips the platform branch, always builds a `PeekAccessService`. Still shipped; used by the `dashboard` example. |
 | Token verification | `lib/api-auth.ts` | `requirePeekAuth(request)` — pulls `x-peek-auth`, verifies, returns claims or a 401. |
 | Peek client construction | `lib/peek-service.ts` | `createPeekService(auth)` / `createPeekServiceForInstall(installId)` and `verifyPeekAuthToken(token)`. |
 | Env contract | `lib/env.ts` | Zod-validated `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_API_URL`, `PEEK_APP_URL` (see `peek-manifest-and-deploy`). |
@@ -174,17 +197,18 @@ JS SDK — see `javascript-app-utilities` for the package/paths.
 The most common task. Follow the existing pattern exactly (see
 `app/examples/peek-pro/main/api/me/route.ts` and `.../activities/route.ts`).
 
-**1. Server — the route.** Wrap the handler in `withPeekAuthentication`. It hands you a verified,
-install-scoped `PeekAccessService` (`peek`) and the token `auth` claims. Never read or decode the
-token yourself.
+**1. Server — the route.** Wrap the handler in `withAppAuthentication<PeekAccessService>`. It hands
+you a verified, install-scoped `PeekAccessService` (`peek`) and the token `auth` claims. Never read
+or decode the token yourself. (Naming the type argument is what lets a route under the Peek tree
+receive a concrete `PeekAccessService` with no narrowing.)
 
 ```ts
 // app/examples/peek-pro/main/api/<thing>/route.ts
 import { type NextRequest, NextResponse } from "next/server";
 import { type PeekAccessService } from "@peektravel/app-utilities";
-import { withPeekAuthentication } from "@/lib/with-peek";
+import { withAppAuthentication } from "@/lib/with-app";
 
-export const GET = withPeekAuthentication(
+export const GET = withAppAuthentication<PeekAccessService>(
   async (_request: NextRequest, peek: PeekAccessService) => {
     const data = await peek.getAllActivities(); // SDK surface → peek-backoffice-api
     return NextResponse.json({ data });
@@ -265,8 +289,8 @@ service from env, including the `createPeekServiceForInstall` server paths above
 - **Never suggest cookies** for the token, or any redirect-based token carry. Blocked in
   third-party iframes. (Generic rationale: `embed-and-auth`.)
 - **Never verify the peek-auth JWT by hand.** Delegate to `PeekAccessService` via
-  `verifyPeekAuthToken` / `withPeekAuthentication`. Build the service from the *verified token's*
-  claims (install-scoped), not from static values.
+  `verifyPeekAuthToken` / `withAppAuthentication` (or the peek-only `withPeekAuthentication`). Build
+  the service from the *verified token's* claims (install-scoped), not from static values.
 - **One token requester per mount.** Multiple `postMessage` listeners race and double-request the
   parent. Reuse `requestToken()` / `apiFetch`; the 401-refresh path is the same single channel.
 - **Keep the `/examples/peek-pro/*` CSP header** — `frame-ancestors 'self' *`; without it Peek

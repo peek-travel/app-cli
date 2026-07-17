@@ -183,6 +183,9 @@ host works.
 
 ## Related skills
 
+- **`cli`** (global) — the `@peektravel/app-cli` commands used throughout here: `peek dev`,
+  `sync-app`, `extensions list`/`show`, plus `show-env` / `auth whoami` preflight and
+  `--skip-env-confirm`.
 - **`manifest-and-deploy`** (global) — the generic manifest→registry, 2-env-401, env-coherence
   concept behind this skill.
 - **`javascript-nextjs`** (stack) — the Next build on Vercel and the `lib/env.ts` Zod validation

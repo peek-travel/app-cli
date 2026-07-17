@@ -4,11 +4,11 @@ These are the Claude skills that teach an agent how to build an app on this CLI'
 They're organized on **three orthogonal axes** so the same knowledge can be composed for any
 platform + tech stack the CLI supports.
 
-> **Delivery note (current state):** this tree is the **authoring source of truth**. It is not yet
-> wired into `peek init` — the `templates/nextjs-starter-kit/.claude/skills/` copy is still what
-> ships into scaffolded apps. A follow-up will teach the CLI to compose
-> `global + platform/<platform> + stack/<stack>` into each scaffolded app's `.claude/skills/`.
-> Until then, skills live in two places; edit *here*.
+> **Delivery note:** this tree is the **single source of truth** that ships. `peek init` composes
+> `global + platform/<platform> + stack/<stack>` into each scaffolded app's `.claude/skills/` via
+> `composeSkills()` (`src/lib/scaffold.ts`, called from `src/commands/init.ts`) — the starter-kit
+> template no longer carries its own skills copy. Edit skills **here**; each is copied to a folder
+> named after its frontmatter `name`.
 
 ## The three axes
 

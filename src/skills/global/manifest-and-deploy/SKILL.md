@@ -30,8 +30,11 @@ example** — the concrete manifest shape, env-var names, and dev CLI behavior l
 
 The manifest declares the app to the platform registry — **what the app is** (id, name, version,
 listing copy, icon, categories), **where it lives** (its public base URL and the embed entry URL the
-platform loads inside its surface), and **what capabilities it requests** (the platform extendables
-that grant API access; the webhook and MCP endpoint URLs, if any).
+platform loads inside its surface), and **what capabilities it requests** (the **extensions** /
+extendables that grant API access, surface the app, and register its webhooks). Enumerate the
+extensions available for the platform and read each one's required config with the CLI (`extensions
+list` / `extensions show` — see `cli`); pushing the manifest to the registry is `sync-app` (also
+`cli`).
 
 - The embed entry URL in the manifest **is what the platform POSTs to** — it must match the embed
   route your app implements (see `embed-and-auth`).
@@ -116,6 +119,9 @@ Deploy to **any Node-capable host**; the concrete recommended host and its build
 
 ## Related skills
 
+- `cli` — the CLI that drives all of this: `extensions list`/`show` to discover what the manifest
+  can declare, `sync-app` to push the manifest, `dev` to run locally, and the registry/login
+  preflight checks.
 - `peek-manifest-and-deploy` — the canonical concrete manifest fields, the `PEEK_APP_*` env names,
   the two-manifest sandbox/prod split, the dev-CLI behavior, and the recommended host/DB.
 - `javascript-nextjs` — the framework build/deploy details and the CSP/iframe header.

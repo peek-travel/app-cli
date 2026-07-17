@@ -124,5 +124,9 @@ Platform data routinely includes sensitive PII (guest names, emails, phones, pay
 - `javascript-app-utilities` — the stack's SDK package and *how* to introspect the installed
   package (types + docs) to enumerate the platform's capabilities.
 - `embed-and-auth` — how the authenticated, install-scoped client gets built per request.
-- `webhooks` — the inbound path; reuse the same ID normalization + per-install scoping.
+- `webhooks` — the inbound path; reuse the same ID normalization + per-install scoping. The
+  install/uninstall signal you need to provision and to **wipe data on uninstall** comes from the
+  `app_registry_webhook@v1` extension.
+- `cli` — inspect that extension (`extensions show app_registry_webhook@v1`) and the rest of what
+  the app can declare; check availability for the selected platform.
 - `manifest-and-deploy` — how the app is granted API access and where secrets live.

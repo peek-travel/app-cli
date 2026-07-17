@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { Args, Command, Flags } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
+import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
@@ -10,7 +11,7 @@ import { writeEnvLocal } from "../lib/scaffold.js";
 import { syncApp } from "../lib/sync.js";
 import { failure } from "../lib/ui.js";
 
-export default class UseUrl extends Command {
+export default class UseUrl extends BaseCommand {
   static description =
     "Point your app at a permanent base URL (e.g. a deployed host) and publish it to the registry";
 

@@ -22,12 +22,13 @@ authoritative *how it works on Peek*.
 
 Authenticated requests get a ready-to-use, install-scoped **`PeekAccessService`** instance (called
 `peek` by convention). The auth pipeline builds it for you: inside a route wrapped in
-`withPeekAuthentication`, the second argument *is* the authenticated `PeekAccessService` (see
-`peek-embed-and-auth`).
+`withAppAuthentication<PeekAccessService>` (the current, brand-agnostic wrapper — it verifies once
+and branches on the token's `platform` claim to the Peek accessor), the second argument *is* the
+authenticated `PeekAccessService` (see `peek-embed-and-auth`).
 
 ```ts
 // app/examples/peek-pro/main/api/<thing>/route.ts
-export const GET = withPeekAuthentication(
+export const GET = withAppAuthentication<PeekAccessService>(
   async (_request: NextRequest, peek: PeekAccessService) => {
     const products = await peek.getAllActivities();
     return NextResponse.json({ activities: products });
