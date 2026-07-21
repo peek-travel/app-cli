@@ -44,6 +44,10 @@ If this app needs a DB:
   on **normalized** resource IDs. See `backoffice-data`.
 - **Entities:** <tables/collections + fields>
 - **PII handling:** <what is stored vs. referenced by a platform ID; encryption; retention>
+- **`fullCustomerAccess`:** <default `false` (PII off) — the recommendation whenever the app needs
+  only aggregate/operational signal; OR `true` + the concrete feature(s) that require PII (customer
+  contact / payments / refunds / invoicing / add-ons) and confirmation the install is entitled>. Set
+  once at client construction; no per-call override. See `backoffice-data` / `peek-backoffice-api`.
 
 ## 6. Security
 - Secrets in the host's secret store — never in the repo or client bundle. See `manifest-and-deploy`.
