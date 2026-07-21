@@ -172,6 +172,32 @@ for the three IDs, check the installed package types + `docs/` (`javascript-app-
 
 Peek data routinely includes sensitive PII (guest names, emails, phones, payment metadata):
 
+- **`fullCustomerAccess` — PII is OFF by default; treat pulling it as an opt-in.** Build the
+  `PeekAccessService` with `accessOptions: { fullCustomerAccess: boolean }` (passed **once at
+  construction** — there is no per-call override; it applies to every service the client hands out).
+  It **defaults to `false`** (omitting `accessOptions`, `{}`, or `undefined` are all identical), and
+  `false` has **two distinct effects**:
+  1. **Customer PII is never requested** — it's filtered out of the GraphQL selection at the
+     gateway, so identity fields (primary-guest `customerName`/`email`/`phone`/`postalCode`,
+     per-guest identity, custom `questionAnswers`/`fieldResponses`, the customer `portalUrl`; review
+     `customerName`/`customerEmail`; waiver `guestName`/`fileUrl`) arrive **`null`/empty**. **Silent
+     gotcha:** no error, no warning — a redacted name looks exactly like a guest who left it blank.
+     Debugging "why is `customerName` null?" — check this flag first.
+  2. **Payment & booking-modification ops are disabled** — `getPaymentsOnFile`, `makePayment`,
+     `refund`, `createInvoiceLink`, `addAddon`, `removeAddon` throw an exported
+     `PiiAccessDisabledError` (its `.operation` names the blocked method) **before any network
+     call**. Everything else (`create` incl. `markAsPaid`, `getById`, `getGuests`, `searchBy*`,
+     `cancel`, `appendNote`, `setCheckinStatus`, timeslots, notes, availability, promo codes,
+     **pricing**) works without the flag.
+- **Recommend the default** for operations/logistics tooling and demand/occupancy/revenue reporting
+  — it's fully functional PII-free and removes the compliance load of holding PII. Set
+  `fullCustomerAccess: true` only when a concrete feature must contact customers or move money, and
+  only when the install is entitled (the gateway is the final authority and may still reject). Set
+  it where the kit constructs the `PeekAccessService` (`lib/peek-service.ts`); need both modes for
+  one install? Construct two clients. Authoritative details (redaction table, blocked ops) live in
+  the package's `llms.txt` "Access options / PII" section and the installed types:
+  `https://raw.githubusercontent.com/peek-travel/app-utilities/refs/heads/main/llms.txt` (see
+  `javascript-app-utilities`).
 - HTTPS in transit; encrypt at rest; restrict who/what can read it.
 - Store the **minimum** necessary; prefer referencing Peek IDs over copying PII.
 - Keep secrets out of source control and client bundles — use your host's secret store (Vercel
@@ -187,6 +213,8 @@ Peek data routinely includes sensitive PII (guest names, emails, phones, payment
   utilities` package: types/`docs/` paths, confirming a version, enumerating the client surface.
 - **`peek-embed-and-auth`** — how the authenticated `peek` client gets built per request, and
   `createPeekServiceForInstall` for server paths with no user token.
+- **`peek-pricing`** — adjusting ticket prices via the pricing engine + overrides API on this same
+  `PeekAccessService` client (`getPricingService()`); Peek-only.
 - **`peek-webhooks`** — the inbound path; reuse the same ID normalization + `installDataId`
   scoping to *act* on events.
 - **`peek-manifest-and-deploy`** — the `peek_backoffice_api@v1` extendable in `app.json` grants

@@ -89,6 +89,19 @@ Edge. This is the concrete basis for the runtime flags in the MCP-endpoint guida
 `export const runtime = 'edge'` breaks token verification and the SDK) — see `peek-mcp-endpoint`
 and `javascript-nextjs` for how that constraint lands in the framework.
 
+## PII access — `accessOptions.fullCustomerAccess` (set once at construction)
+
+Every access service takes `accessOptions?: { fullCustomerAccess?: boolean }` in its constructor —
+passed **once**, applied to every sub-service it hands out, **no per-call override**. It **defaults
+to `false` (PII off)**: customer identity is filtered out of the request at the gateway (fields
+arrive `null`/empty, silently) and payment/booking-modification ops throw the exported
+`PiiAccessDisabledError` before any network call. This is a **stack-level SDK mechanism** (the field
+exists on `Peek`/`Cng`/`Acme` access services alike — inert where a platform has no PII surface); the
+concrete redaction table and blocked-op list are a **platform capability** (see `peek-backoffice-api`
+on Peek). Design rule of thumb: **keep the default and only opt into `true` when the app must contact
+customers or move money** (see `backoffice-data`, `app-builder`). Full spec: the package's `llms.txt`
+"Access options / PII" section + the installed types.
+
 ## Related skills
 
 - **backoffice-data** — the generic discipline: official SDK only (never raw HTTP/GraphQL),

@@ -104,7 +104,7 @@ anything differently (skip, reorder, re-emphasize). Then begin.
 
 | Step | What it covers | Lean on |
 | --- | --- | --- |
-| 1. **Discover purpose** | What gap does this fill? Who uses it (account staff / guests / app admin)? What triggers it (a webhook, a schedule, a user action)? What platform data does it read/change? Tight v1 scope. **Explicitly raise the MCP endpoint here** (built by default): tell the user, **recommend a concrete tool list** derived from the app's jobs, and let them confirm/trim/opt out. Also **flag any stack risk** that could break the endpoint. Start the **capability gate**: sanity-check that the platform data/actions you'll need exist for the selected platform. | `backoffice-data`, `webhooks` for what's possible; `mcp-endpoint` for what to expose; your platform's + stack's skills for the concrete surface |
+| 1. **Discover purpose** | What gap does this fill? Who uses it (account staff / guests / app admin)? What triggers it (a webhook, a schedule, a user action)? What platform data does it read/change? Tight v1 scope. **Explicitly raise the MCP endpoint here** (built by default): tell the user, **recommend a concrete tool list** derived from the app's jobs, and let them confirm/trim/opt out. Also **flag any stack risk** that could break the endpoint. Start the **capability gate**: sanity-check that the platform data/actions you'll need exist for the selected platform. **Decide the PII posture here too:** the SDK omits customer PII **by default** (`fullCustomerAccess: false`), so treat pulling PII as an opt-in you must justify. If the app only needs aggregate/operational signal (demand over time, occupancy, revenue trends), **recommend keeping the default** — and reach for `fullCustomerAccess: true` only when a concrete feature needs to contact customers or move money (see the PII hard rule below). | `backoffice-data`, `webhooks` for what's possible; `mcp-endpoint` for what to expose; your platform's + stack's skills for the concrete surface |
 | 2. **Mock the UI** | Build an interactive single-file `index.html` mockup with the platform's UI kit, iterate until the user is happy. | your stack's UI skill (e.g. `javascript-odyssey-ui`) |
 | 3. **Plan** | Map the **data flow** as rigorously as the UI (source → when → storage → **verified available in the installed SDK?**), pick which webhooks vs. SDK calls, note per-install data scoping if persistence is added. Close the capability gate: every needed capability confirmed present for the selected platform. Write it up using `plan-template.md`. | all the generic skills + your platform's + stack's skills + the installed package + web |
 | 4. **Sign-off (hard gate)** | Present the plan; get an explicit "yes, build this." Call out anything you **couldn't verify** (`TODO(verify)`). **Do not build before this.** | — |
@@ -198,7 +198,14 @@ reaches the user.
   only if the user says the app shouldn't be AI-addressable. **When you later add a feature, keep
   the MCP tools in sync.**
 - **Treat platform data as sensitive PII.** Security-first storage/logging/transit; no PII or
-  tokens in logs.
+  tokens in logs. **And don't pull PII you don't need — PII is OFF by default.** The SDK
+  (`@peektravel/app-utilities` 0.5.1+) takes `accessOptions: { fullCustomerAccess }` once at client
+  construction; it **defaults to `false`**, which redacts customer identity and disables
+  payment/booking-modification ops. **Make an explicit recommendation to the user at design time:**
+  keep the default whenever the app's job is aggregate/operational (demand, occupancy, revenue
+  trends) and only set `fullCustomerAccess: true` when a concrete feature must contact customers or
+  move money — and only if the install is entitled. See `backoffice-data`, and `peek-backoffice-api`
+  for the concrete Peek redaction behavior and blocked operations.
 - **Scope persisted data to a stable per-install data key** if/when you add a database. See
   `backoffice-data`.
 - **Don't invent platform endpoint/schema/event details.** Resolve them from the installed SDK
@@ -225,6 +232,6 @@ reaches the user.
 
 Generic: `cli` · `embed-and-auth` · `backoffice-data` · `webhooks` · `mcp-endpoint` ·
 `manifest-and-deploy` · `testing`. Then link down to **your platform's** skills (the canonical
-example set: `peek-embed-and-auth`, `peek-backoffice-api`, `peek-webhooks`, `peek-mcp-endpoint`,
-`peek-manifest-and-deploy`) and **your stack's** skills (on JS: `javascript-app-utilities`,
+example set: `peek-embed-and-auth`, `peek-backoffice-api`, `peek-pricing`, `peek-webhooks`,
+`peek-mcp-endpoint`, `peek-manifest-and-deploy`) and **your stack's** skills (on JS: `javascript-app-utilities`,
 `javascript-odyssey-ui`, `javascript-nextjs`, `javascript-typings`, `javascript-testing`).

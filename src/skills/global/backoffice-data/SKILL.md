@@ -110,6 +110,18 @@ rules.
 
 Platform data routinely includes sensitive PII (guest names, emails, phones, payment metadata):
 
+- **Don't fetch PII you don't need — and PII is OFF by default, so keep it that way.** The SDK
+  (`@peektravel/app-utilities` 0.5.1+) takes `accessOptions: { fullCustomerAccess }` once when the
+  access client is constructed; it **defaults to `false`**, so customer identity is redacted at the
+  source (fields arrive `null`/empty — filtered in the gateway selection, never fetched) and
+  payment/booking-modification operations are disabled. Not fetching PII is the strongest possible
+  handling: nothing to encrypt, log-redact, or retain, and far less compliance exposure. **Make this
+  an explicit design-time recommendation to the user:** keep the default for operations/logistics
+  tooling (manifests, check-in, guide assignment, notes, availability — all fully functional without
+  PII), and only opt into `fullCustomerAccess: true` when a concrete feature must contact customers
+  or move money (guest messaging, payments, refunds, invoicing, add-ons), and only when the install
+  is entitled. The concrete redaction table + blocked-ops list are platform-specific — see
+  `peek-backoffice-api`; the constructor option itself lives on the SDK (`javascript-app-utilities`).
 - **HTTPS in transit; encrypt at rest; restrict who/what can read it.**
 - **Store the minimum** necessary; **prefer referencing platform IDs over copying PII.**
 - Keep secrets out of source control and client bundles — use your host's secret store (see
