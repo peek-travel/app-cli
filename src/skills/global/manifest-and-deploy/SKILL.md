@@ -97,7 +97,9 @@ split and dev-CLI behavior.
 ## 5. Deployment
 
 Deploy to **any Node-capable host**; the concrete recommended host and its build details are in
-`javascript-nextjs` / `peek-manifest-and-deploy`. Regardless of host:
+`javascript-nextjs` / `peek-manifest-and-deploy`. One worked concrete example — Fly.io, with its
+`flyctl` login/launch flow, the pnpm-workspace Dockerfile gotcha, and managed Postgres — is
+`javascript-deploy-fly`. Regardless of host:
 
 - Set the env vars in the host (the coherent **prod** set from §3 — do not carry over the sandbox
   URL from local dev; add the DB URL if used).
@@ -125,6 +127,7 @@ Deploy to **any Node-capable host**; the concrete recommended host and its build
 - `peek-manifest-and-deploy` — the canonical concrete manifest fields, the `PEEK_APP_*` env names,
   the two-manifest sandbox/prod split, the dev-CLI behavior, and the recommended host/DB.
 - `javascript-nextjs` — the framework build/deploy details and the CSP/iframe header.
+- `javascript-deploy-fly` — a concrete Fly.io deploy recipe instantiating this contract.
 - `embed-and-auth` — the embed route the manifest points at; how the app secret is used and why a
   config error is a 500, not a 401.
 - `backoffice-data` — the extendable that grants API access, and the per-install scoping key for the

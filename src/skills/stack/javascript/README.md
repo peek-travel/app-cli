@@ -42,6 +42,8 @@ If you scaffold or deploy anywhere, confirm the target provides a full Node.js r
 - `odyssey-ui/` — the shared Odyssey design theme (`<ody-*>` components), plus `mockup-template.html`.
 - `typings/` — typing custom elements for React/TSX (`CustomEl`, one-declaration-file rule).
 - `testing/` — Vitest wiring, coverage, the CI gate.
+- `deploy-fly/` — concrete Fly.io deploy recipe (one host choice): `flyctl`, `fly launch --org`, the
+  pnpm-workspace Dockerfile gotcha, and attaching managed Postgres.
 
 These are the **stack** layer. The generic concepts live in `global/*`; the platform specifics live
 in `platform/<platform>/*`. A finished app composes one of each.
