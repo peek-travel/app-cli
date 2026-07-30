@@ -5,11 +5,12 @@ description: >-
   shipped inside @peektravel/app-utilities. Use when adding or styling any embedded view, rendering
   Odyssey components in React, wiring the OdysseyLoader, finding icon names, or generating an
   interactive HTML mockup for design sign-off. Covers the npm vs CDN include paths, the
-  attribute/property/event conventions, the light-DOM slotting gotcha, and pulling the live
+  attribute/property/event conventions, the light-DOM slotting gotcha, the React-19 getter-only
+  attribute crash (rich data + reflected attributes must be set via a ref), and pulling the live
   component docs. For typing <ody-*> elements in TSX, see javascript-typings. Triggers on "Odyssey",
   "ody-button", "ody-*", "Peek UI", "component", "style the app", "mockup", "design the view",
   "OdysseyLoader", "ody-icon", "icon name", "iconNames", "brand icon", "which icons are available",
-  "ody-* attribute not working".
+  "ody-* attribute not working", "only has a getter", "Cannot set property", "searchable".
 ---
 
 # Odyssey UI — the shared design theme
@@ -78,6 +79,46 @@ Then use `<ody-*>` tags in your `"use client"` components.
 - **Content → light-DOM children:** the component renders your child nodes.
 - **Wrap page/settings UI in `<ody-page-container>`** — the standard responsive wrapper
   (~868px narrow / ~1310px wide).
+
+## Rich data & reflected getter-only attributes must be set via a ref (React-19 gotcha)
+
+React 19 assigns unknown element props by **writing to the DOM property** (`el.prop = value`), not
+via `setAttribute`. Odyssey exposes some attributes as **reflected, getter-only properties** (e.g.
+`searchable` on data/table components). Passing one as a JSX prop makes React try to *write* that
+getter-only property, and it **throws at render**:
+
+```
+Cannot set property searchable of #<HTMLElement> which has only a getter
+```
+
+Same for **rich data** (arrays/objects — `columns`, `data`): those are JS properties, not
+attributes, and passing them as JSX props is unreliable (and can hit the same wall). The tell:
+the component crashes the render tree (not a silent no-show like the light-DOM gotcha), and
+lint/typecheck pass — it only blows up in the browser.
+
+**Rule: set rich data and getter-only/reflected attributes imperatively, through a `ref` —
+never as JSX props.** Use `setAttribute` for reflected attributes and property assignment for rich
+data, in a `useEffect`:
+
+```tsx
+// ❌ React 19 tries el.searchable = true (getter-only) and el.columns = [...] → throws at render.
+<ody-table searchable columns={cols} data={rows} />
+
+// ✅ Set them imperatively via a ref after the element mounts.
+const ref = useRef<HTMLElement>(null);
+useEffect(() => {
+  const el = ref.current;
+  if (!el) return;
+  el.setAttribute('searchable', '');   // reflected getter-only attribute
+  (el as any).columns = cols;          // rich data → JS property
+  (el as any).data = rows;
+}, [cols, rows]);
+
+return <ody-table ref={ref} />;
+```
+
+(Plain scalar attributes that aren't getter-only — `variant`, `left-icon` — are still fine as JSX
+props per the conventions above; this only bites reflected getter-only attributes and rich data.)
 
 ## Finding icon names (`<ody-icon>` and `<ody-brand-icon>`)
 
