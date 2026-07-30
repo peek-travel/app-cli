@@ -7,7 +7,8 @@ description: >-
   brand-agnostic peek-auth token as the UI), the tools/list + tools/call route shape, sharing
   service-layer logic with the UI, the Node-runtime requirement, and the fact that ACME's small
   typed SDK surface is the hard ceiling on what you can expose. Triggers on "acme MCP", "MCP
-  endpoint", "expose acme tools", "tools/list", "tools/call", "App Store AI", "headless acme access".
+  endpoint", "expose acme tools", "tools/list", "tools/call", "App Store AI", "headless acme access",
+  "app_registry_mcp_url", "mcp_url".
 ---
 
 # The app's ACME MCP endpoint
@@ -98,6 +99,26 @@ direct-API escape hatch — see `acme-backoffice-api`). Right now that's essenti
 capability, mirroring the UI actions you build. Present the proposed list to the user and get
 sign-off before implementing.
 
+## Declaring the endpoint in `app.acme.json`
+
+**Declare the MCP endpoint in the manifest** so ACME/the orchestrator can find it. The registry
+extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry_extendables`
+entry with a **single parameter, `mcp_url`** (the route ACME calls — e.g. `/examples/acme/mcp`),
+alongside the existing `app_registry_settings_url@v1`:
+
+```jsonc
+// app.acme.json → registry_extendables
+{
+  "app_registry_settings_url@v1": { "url": "/examples/acme/main", "url_mode": "prepend_base_url" },
+  "app_registry_mcp_url@v1":      { "mcp_url": "/examples/acme/mcp" }
+}
+```
+
+Confirm the current parameters (and whether `mcp_url` prepends `base_url` like the settings URL
+does) with **`npx @peektravel/app-cli extensions show app_registry_mcp_url@v1`** before shipping —
+it prints the extendable's exact fields. That command needs an interactive, signed-in shell (see
+`cli` for the headless caveat). After editing the manifest, re-sync (see `acme-manifest-and-deploy`).
+
 ## ACME-specific stack flag: Node runtime, not Edge
 
 `AcmeAccessService` is **Node-only** (it verifies the JWT and mints API tokens with Node `crypto`).
@@ -119,8 +140,10 @@ verified token's install).
 - **Share logic with the UI; never fork it.** Tools call the same service-layer functions the UI
   routes call; keep them in sync as the app grows (also in `AGENTS.md`).
 - **`AcmeAccessService` is Node-only — keep the route on the Node runtime, not Edge.**
-- **Don't invent the wire protocol / registry key or a capability the SDK lacks** — the typed SDK
-  is the ceiling on ACME. Get facts from the installed package / live doc; `TODO(verify)` gaps.
+- **Don't invent the wire protocol or a capability the SDK lacks** — the typed SDK is the ceiling on
+  ACME. Get facts from the installed package / live doc; `TODO(verify)` gaps. The registry key is
+  pinned above (`app_registry_mcp_url@v1`, param `mcp_url`) — confirm its fields with `extensions
+  show` rather than guessing.
 
 ## Related skills
 

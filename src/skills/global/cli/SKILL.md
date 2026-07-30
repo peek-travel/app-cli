@@ -11,7 +11,8 @@ description: >-
   the manifest, or debugging "which registry / am I logged in / why is it prompting me." Triggers on
   "peek CLI", "app-cli", "peek dev", "sync-app", "extensions list", "extensions show", "show-env",
   "auth whoami", "auth login", "which registry", "production vs sandbox", "skip-env-confirm",
-  "what extensions are available", "app_registry_settings_url", "app_registry_webhook", "webhook_on".
+  "what extensions are available", "app_registry_settings_url", "app_registry_webhook", "webhook_on",
+  "app_registry_mcp_url", "extensions list no output", "exit 255", "headless", "not signed in".
 ---
 
 # The Peek app CLI
@@ -83,6 +84,14 @@ in** (it opens a browser flow — you can't do it for them):
 npx @peektravel/app-cli@latest auth login
 ```
 
+> **Sign in *before* running any registry command headless.** Every registry-touching command
+> (`extensions list`/`show`, `sync-app`, `dev`, …) calls an "ensure logged in" gate that, when
+> you're **not** signed in, **auto-starts the browser login flow**. In a **non-interactive /
+> agent shell** that flow can't complete — the command emits **no output and exits 255** (it isn't
+> broken; it's silently waiting on a browser that never opens). So run `auth whoami` first; if it
+> says not-signed-in, have the **user** run `auth login` in an interactive terminal, *then* re-run
+> your command. This is the #1 cause of "`extensions list` printed nothing / exit 255."
+
 ## 2. Run the app locally — `dev`
 
 ```bash
@@ -138,6 +147,9 @@ rather than assuming it exists.
 - **`webhook_on_…@v1`** — the family of **booking-system event webhooks** the app can subscribe to,
   to be notified when something happens (a booking created/changed/cancelled, etc.). These are the
   inbound-event path — how you build reactive features. See `webhooks` for the handling model.
+- **`app_registry_mcp_url@v1`** — declares the app's **MCP endpoint** so the store's AI orchestrator
+  can drive it headlessly. One parameter, **`mcp_url`** (the route Peek calls). Declare it when the
+  app exposes MCP tools — see `mcp-endpoint`.
 
 ### Get the config for one — `extensions show`
 

@@ -8,7 +8,7 @@ description: >-
   shape, the tools module pattern, declaring the endpoint in app.json, and the Peek-specific stack
   flags (PeekAccessService is Node-only → Node runtime not Edge). Triggers on "MCP", "MCP
   endpoint", "expose tools", "tools/list", "tools/call", "App Store AI", "headless access",
-  "expose functionality", "what to expose".
+  "expose functionality", "what to expose", "app_registry_mcp_url", "mcp_url".
 ---
 
 # The app's Peek MCP endpoint
@@ -124,10 +124,24 @@ Normalize IDs on input (`B-123ABC` → `b_123abc`) and state units/formats in th
 
 ## Declaring the endpoint in `app.json`
 
-**Declare the MCP endpoint in `app.json`** so Peek/the orchestrator can find it. The exact
-registry extendable/key for an MCP endpoint URL is **volatile** — check the installed package
-(types + `docs/`) / pull the live registry doc for the correct slug, and update the manifest to
-match (see `peek-manifest-and-deploy`). `TODO(verify)` the key if the doc doesn't pin it.
+**Declare the MCP endpoint in `app.json`** so Peek/the orchestrator can find it. The registry
+extendable is **`app_registry_mcp_url@v1`**, a `registry_extendables` entry with a **single
+parameter, `mcp_url`** (the route Peek calls — e.g. `/examples/peek-pro/mcp`), alongside the
+existing `app_registry_settings_url@v1`:
+
+```jsonc
+// app.json → registry_extendables
+{
+  "app_registry_settings_url@v1": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" },
+  "app_registry_mcp_url@v1":      { "mcp_url": "/examples/peek-pro/mcp" }
+}
+```
+
+Confirm the current parameters (and whether `mcp_url` prepends `base_url` like the settings URL
+does) with **`npx @peektravel/app-cli extensions show app_registry_mcp_url@v1`** before shipping —
+it prints the extendable's exact fields. That command needs an interactive, signed-in shell (see
+`cli` for the headless caveat). After editing the manifest, re-sync/re-publish (see
+`peek-manifest-and-deploy`).
 
 ## Peek-specific stack flag: Node runtime, not Edge
 
@@ -159,8 +173,9 @@ MCP-specific assertions:
 - **Share logic with the UI; never fork it.** Tools call the same functions the UI routes call.
   Keep the tools in sync as the app grows (also in `AGENTS.md`).
 - **`PeekAccessService` is Node-only — keep the route on the Node runtime, not Edge.**
-- **Don't invent the wire protocol / registry key.** Get them from the installed package / live
-  doc; `TODO(verify)` gaps.
+- **Don't invent the wire protocol.** Get it from the installed package / live doc; `TODO(verify)`
+  gaps. The registry key is pinned above (`app_registry_mcp_url@v1`, param `mcp_url`) — confirm its
+  fields with `extensions show` rather than guessing.
 - **Curate + treat tool I/O as PII** — per `mcp-endpoint`.
 
 ## Related skills
