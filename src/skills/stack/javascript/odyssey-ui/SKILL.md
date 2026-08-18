@@ -202,6 +202,21 @@ Override design tokens in CSS rather than hardcoding brand colors: `--color-<nam
 `--layout-top-bar-height`, `--ody-shadow-base`. Some components accept inline color via attributes
 (e.g. `bar-color="var(--color-success-300)"`).
 
+## No app chrome — the host frames your app
+
+Embedded views render **inside the platform's iframe**, and the host already draws the app's
+**name, navigation, and window chrome around the frame**. So your UI must **not** repeat any of it:
+
+- **No app-name header or title bar** at the top of the view. It's redundant with the host chrome,
+  pushes your real UI down, and reads as non-native. **Open straight into what the app does** — the
+  first thing in the frame is the app's actual content and controls.
+- Wrap the content in `<ody-page-container>` (per the conventions above) and start with the real
+  UI. A heading for the *current view's* content is fine; an app-level banner/title is not.
+
+This is the *embedded* surface. A separate admin/developer surface you own (rendered outside the
+host) can have whatever chrome you like. The underlying reason is platform-agnostic — the host owns
+the chrome, not just identity; see `embed-and-auth`.
+
 ## The mockup workflow (step 2 of the build)
 
 Before building the real UI, make the design concrete with an **interactive single-file
@@ -211,7 +226,8 @@ Before building the real UI, make the design concrete with an **interactive sing
    **CDN** Odyssey includes (mockups are standalone, so CDN — not the npm package) and scaffolds
    `<ody-page-container>` + an `<ody-tabs>` variant area.
 2. Build the proposed UI in it from what you've learned; tell the user to open it in a browser and
-   react.
+   react. **Don't mock an app-name header or title bar** — the host provides it around the frame
+   (see "No app chrome" above); the mockup opens straight into the app's content.
 3. Collect feedback one question at a time; revise. **When unsure about a layout/flow, render
    multiple variants in the *same* file** (wrap each in a tab) so the user compares directly, then
    collapse to the chosen direction.
@@ -222,8 +238,7 @@ Before building the real UI, make the design concrete with an **interactive sing
 
 ## Still open / `TODO(verify)`
 
-- Brand assets beyond the component set (logo usage), and any layout conventions specific to
-  embedded vs. admin surfaces.
+- Brand assets beyond the component set (logo usage).
 - Accessibility requirements the platform mandates for published apps.
 - Whether/when Odyssey forks per-platform (peek vs. cng vs. acme) — treat as one shared theme until
   it does.
@@ -235,6 +250,8 @@ Before building the real UI, make the design concrete with an **interactive sing
 - **javascript-typings** — typing `<ody-*>` elements for React/TSX (the material this skill points
   to for JSX/`CustomEl`).
 - **app-builder** — step 2 (mockup) and step 5 (build the real UI) both drive this skill.
+- **embed-and-auth** — why the host owns the surrounding chrome (the platform-agnostic reason the
+  embed renders no app-name header).
 
 ## Artifacts in this folder
 
