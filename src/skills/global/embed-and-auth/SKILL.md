@@ -43,6 +43,22 @@ This is about the acting **user's identity** — that, and only that, is browser
 any server context that has a persisted install id — see
 [Server-to-host without a user token](#server-to-host-without-a-user-token) below.
 
+## The host owns the chrome, not just identity
+
+The same "the host owns it" logic extends past the token to the **surrounding UI**. The host frames
+your app — it renders the app's **name, navigation, breadcrumbs, and window chrome outside the
+iframe**. Your embedded views render **only the app's own content**.
+
+- **Don't render an app-name header or title bar inside the embed.** The host already shows which
+  app the user is in, around the frame. A second title inside the iframe is redundant chrome that
+  pushes your real UI down and reads as non-native. **Open straight into what the app does** — the
+  first thing in the frame is the app's actual content and controls.
+- This applies to the *embedded* surface specifically. A separate developer/admin surface you own
+  (rendered outside the host) is yours to chrome however you like.
+
+The concrete layout conventions for building this are stack-specific — on the JS stack see
+`javascript-odyssey-ui`.
+
 ## The request lifecycle (end to end)
 
 ```
@@ -158,6 +174,9 @@ implementation.
   *reason*, never the token or the decoded claims (PII).
 - **The install/tenant id for server-side calls must come from a trusted server source** — never a
   forgeable request param.
+- **Don't add your own app-name header/title bar to an embedded view.** The host renders the app's
+  name and navigation outside the iframe; the embed shows only the app's own content — go straight
+  into the function. (A separate admin surface you own may have its own chrome.)
 
 ## Related skills
 
