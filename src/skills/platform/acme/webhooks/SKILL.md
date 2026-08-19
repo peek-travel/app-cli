@@ -4,11 +4,13 @@ description: >-
   How to receive and handle ACME webhooks in a starter-kit app — today that means the
   platform-agnostic install-status webhook (install/uninstall lifecycle), NOT booking/waiver
   parsers (those are peek-only). Use when adding or changing the endpoint that reacts to an app
-  being installed/uninstalled on ACME, or any future ACME event. Covers verifying the delivery with
-  requirePeekWebhookAuth (the same registry-signed peek-auth JWT, tolerant of a null user), the
-  unconfirmed install-status payload, idempotency/installDataId scoping, and acting on an event via
-  an install-scoped ACME client. Triggers on "acme webhook", "install-status", "install/uninstall
-  event", "requirePeekWebhookAuth", "app_registry_webhook", "react to an acme install".
+  being installed/uninstalled on ACME, or any future ACME event. Covers verifying + parsing the
+  delivery with parseInstallWebhook (it verifies the signed app_registry_v2 JWT and merges the JSON
+  body into a flat InstallWebhook), what identity to persist (accountId/partnerId is permanent,
+  installId may change, persist platform + accountName) and how permanent each is,
+  idempotency/installDataId scoping, and acting on an event via an install-scoped ACME client.
+  Triggers on "acme webhook", "install-status", "parseInstallWebhook", "install/uninstall event",
+  "app_registry_webhook", "react to an acme install".
 ---
 
 # ACME webhooks — receiving events
@@ -35,74 +37,90 @@ declared in `app.acme.json` as the `app_registry_webhook@v1` registry extendable
 `app/examples/webhooks/install-status/route.ts`. This same endpoint serves every platform — the
 `account.platform` field on the payload tells you which one fired it.
 
+Unlike booking/waiver, the install lifecycle **does** have a package helper, and it is
+**platform-agnostic** (not Peek-only): **`parseInstallWebhook(token, body, secret)`** verifies the
+signed token and merges it with the JSON body into one flat `InstallWebhook` (`installId`, `accountId`
+— **a.k.a. the partner id** — `accountName`, `platform`, `isTest`, `status`, `displayVersion`,
+`user`). Use it rather than hand-parsing — see `javascript-app-utilities`.
+
 > **Not yet fully handled.** The shipped endpoint **verifies + logs** the delivery; real handling
-> ("do X on install/uninstall") is left to you, and the exact payload shape is **unconfirmed** —
-> `TODO(verify)` it against a real delivery before depending on any field.
+> ("do X on install/uninstall") is left to you.
 
-## Authenticating the delivery — `requirePeekWebhookAuth`, not `verifyPeekAuthToken`
+## Verifying + parsing the delivery — `parseInstallWebhook`
 
-ACME POSTs the **same registry-signed peek-auth JWT** the API pipeline uses, in the `x-peek-auth`
-header. But **do not reuse the library's `verifyPeekAuthToken`** here: that helper assumes a user
-context and throws on `user: null`, and **install-status events are system events with no user.**
-
-So the starter verifies the delivery itself against the same secret and scheme —
-`lib/webhook-auth.ts` exports **`requirePeekWebhookAuth(request)`**, which checks the signature,
-the `app_registry_v2` **issuer**, the `Joken` **audience**, and expiry, while tolerating a null
-user. Missing/invalid token → **401**.
+The install delivery carries **two payloads at once**: a signed `app_registry_v2` JWT (in the
+`x-peek-auth` header) and a plain JSON body. **`parseInstallWebhook(token, body, secret)` verifies the
+token** (signature, `app_registry_v2` issuer, `Joken` audience, expiry — pass the app's
+`PEEK_APP_SECRET`) and **merges** it with the body, so you no longer hand-roll JWT verification. It
+**throws on verification failure** → one `try/catch` → **401**. It also tolerates the `user: null`
+that system-initiated install events carry.
 
 ```ts
 // app/examples/webhooks/install-status/route.ts
-import { requirePeekWebhookAuth } from "@/lib/webhook-auth";
+import { parseInstallWebhook, type InstallWebhook } from "@peektravel/app-utilities";
+import { parseEnv } from "@/lib/env";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const result = requirePeekWebhookAuth(request);
-  if ("error" in result) return result.error;   // 401 on bad/missing token
+  const header = request.headers.get("x-peek-auth");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : header ?? "";
 
-  const body = JSON.parse(await request.text()) as InstallStatusPayload;
-  // ... react to body.status for body.account.platform === "acme"
+  let event: InstallWebhook;
+  try {
+    event = parseInstallWebhook(token, await request.text(), parseEnv().PEEK_APP_SECRET);
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); // bad/forged token
+  }
+  // ... react to event.status for event.platform === "acme"
   return NextResponse.json({ ok: true });
 }
 ```
 
-## The payload (unconfirmed — `TODO(verify)`)
+> **Version note.** Earlier package versions split the install webhook across `parseInstallEvent`
+> (**removed** in 0.7.0) and `verifyInstallWebhook` (**deprecated**); `parseInstallWebhook` supersedes
+> both — verifying *and* merging in one call. If you're on an older scaffold that hand-rolled JWT
+> verification in a `lib/webhook-auth.ts`, that helper is no longer needed — `parseInstallWebhook`
+> verifies for you.
 
-The shipped type is a best-effort placeholder; confirm against a real delivery:
+## The payload — a split trust model
 
-```ts
-type InstallStatusPayload = {
-  status?: string;         // e.g. install / uninstall (values TODO(verify))
-  install_id?: string;     // the install this event is about — your stable key
-  display_version?: string;
-  account?: { id?: string; name?: string; platform?: string; is_test?: boolean };
-};
-```
+The **verified token** is authoritative for `installId`, `accountId`, `status`, `displayVersion`, and
+`user`; the **unsigned JSON body** supplies only `accountName`, `platform`, `isTest`.
+`parseInstallWebhook` reads the shared fields from the token, so a forged or mismatched body can't
+override an authenticated identity. The exact wire shapes (token claims + body JSON) are in `webhooks`.
 
 - **No payload query to register** (unlike Peek's booking webhook, whose payload is shaped by a
-  registered field selection). The shape is fixed by the registry, not shaped by a query you provide.
-- `account.platform` distinguishes peek / cng / acme on this shared endpoint.
-- `account.is_test` flags a test/sandbox account — you may want to skip or branch on it.
+  registered field selection). The shape is fixed by the registry.
+- **`accountId` (the partner id) is the permanent anchor** for account-scoped data; **`installId`
+  identifies a specific install and may change** — don't treat it as an immortal key (full model in
+  `webhooks` / `acme-backoffice-api`).
+- **Persist `platform`** — it selects the access service (acme vs peek vs cng) on this shared
+  endpoint — and **`accountName`** for debugging.
+- `isTest` flags a test/sandbox account — you may want to skip or branch on it.
+- **These fields always arrive and are never null — model them as non-nullable columns.** The only
+  `null` is the version-mismatch sentinel on `platform`/`status`, which you fail loud on.
 
 ## Endpoint rules
 
-- **Authenticating the delivery is YOUR responsibility** — always run `requirePeekWebhookAuth`
-  before trusting the body.
+- **Verify before trusting the delivery** — `parseInstallWebhook` throws unless the token's signature,
+  issuer, audience, and expiry all check out; a `try/catch` → **401** is your gate.
 - **Acknowledge fast, process safely, be idempotent** — assume at-least-once delivery (generic
   discipline in `webhooks`). Install/uninstall can be redelivered; make handling repeat-safe.
-- **Scope any stored data to `installDataId`**, derived from `install_id` (the install ID does not
-  rotate — see `acme-backoffice-api`). Install-status is the natural place to hang install-lifecycle
-  handling: on install, get-or-create the install record; on uninstall, mint a fresh
-  `installDataId` / wipe prior data on the next reinstall (`TODO(verify)` the exact `status`
-  values first).
-- **To *act* on an event** (call ACME in response), build an install-scoped client from the
-  `install_id` on the payload — `createAcmeServiceForInstall(install_id)` (see the server-to-ACME
-  recipe in `acme-embed-and-auth`). Do **not** use the user-token pipeline — there is no user here.
+- **Key account-permanent data on `accountId`; scope wipe-on-reinstall working data to a
+  `installDataId` you mint** (see `acme-backoffice-api`). Install-status is the natural place to hang
+  install-lifecycle handling: on install, upsert the install/account record (capturing `accountId`,
+  `accountName`, `platform`) and stamp a fresh `installDataId`; on uninstall, tear down / wipe the
+  prior install's data. **Fail loud on an unknown `status`** — a 2xx is treated as delivered and not
+  redelivered, so a coerced unknown drops the transition.
+- **To *act* on an event** (call ACME in response), build an install-scoped client from
+  `event.installId` — `createAcmeServiceForInstall(event.installId)` (see the server-to-ACME recipe in
+  `acme-embed-and-auth`). Do **not** use the user-token pipeline — there is no user here.
 
 ## Future ACME events
 
 If ACME later ships event-specific parsers or additional webhooks, they'll appear in the installed
 package (types + `docs/webhooks.md`) — introspect it (`javascript-app-utilities`) and pull the live
 doc; **don't hand-write or assume a parser that isn't there.** Today, install-status is the only
-ACME-relevant webhook, and you parse its JSON yourself.
+ACME-relevant webhook, and you verify + parse it with `parseInstallWebhook`.
 
 ## Related skills
 

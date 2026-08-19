@@ -23,14 +23,14 @@ recent bookings pulled live from the Peek Pro API.
 
 ## webhooks
 
-An inbound webhook endpoint that Peek Pro POSTs to on install-status events
-(install / uninstall / etc.). Deliveries are authenticated with the same
-registry-signed peek-auth JWT the API pipeline uses, but via
-`requirePeekWebhookAuth`, which tolerates the `user: null` these system events
-carry. For now it just logs the delivery — add real handling once the payload
-shape is confirmed.
+An inbound webhook endpoint that Peek Pro POSTs to on install-lifecycle events
+(installed / uninstalled / updated). The delivery carries a signed
+`app_registry_v2` JWT (in the `x-peek-auth` header) plus a JSON body;
+`parseInstallWebhook` from `@peektravel/app-utilities` verifies the token and
+merges both into one flat `InstallWebhook`, so a bad/forged delivery is a single
+`try/catch` → 401. For now it just logs the delivery — add real
+provisioning/teardown in the status `switch`.
 
 - Route: `app/examples/webhooks/install-status/route.ts`
-- Auth helper: `lib/webhook-auth.ts`
 - Point the app's install-status webhook URL at
   `/examples/webhooks/install-status` to receive deliveries.

@@ -217,6 +217,16 @@ This is the *embedded* surface. A separate admin/developer surface you own (rend
 host) can have whatever chrome you like. The underlying reason is platform-agnostic — the host owns
 the chrome, not just identity; see `embed-and-auth`.
 
+## User-facing copy: never say "reload the page"
+
+The app lives **inside the host's iframe**, so there is no page the user can reload — the browser's
+reload acts on the *host* page, not your frame, and users have no address bar or refresh control for
+it. So **never write copy that tells the user to "reload"/"refresh the page"** (in error states,
+empty-state CTAs, "try again" prompts, toasts, or recovery instructions). Instead tell them to
+**"close and reopen the app"** (or reopen it from where they launched it) — that's the gesture that
+actually re-runs the app in the iframe. Prefer an in-app retry/refresh action wired to a button when
+one fits; fall back to "close and reopen the app" for anything a control can't recover.
+
 ## The mockup workflow (step 2 of the build)
 
 Before building the real UI, make the design concrete with an **interactive single-file

@@ -71,28 +71,37 @@ display form only for showing humans. These IDs typically **never change**, so t
 your stable key. Mixing formats causes duplicate or missed records. The exact formats and the
 normalization rule are platform-specific — see `peek-backoffice-api`.
 
-## Scope persisted data by a stable per-install key
+## Scope persisted data by the right key: `accountId` for permanence, `installDataId` for wipe
 
-Platforms typically pass several identifiers (who is acting, which account, which install). The
-**install identifier often does NOT rotate** — an uninstall→reinstall can yield the *same* install
-id. So keying your stored data on the raw install id alone means a reinstalled app inherits **stale
-data**.
+Platforms pass several identifiers (who is acting, which account, which install), and they differ in
+**permanence** — key your data on the right one:
 
-When you add persistence, scope every row to a **stable per-install data key** that you **derive
-(get-or-create)** — not the raw install id:
+- **`accountId` (a.k.a. the partner id) is the permanent anchor** — consistent across installs of the
+  app for that account, it does **not** change. **Key anything that must survive an
+  uninstall→reinstall on `accountId`.** It arrives on the **install webhook** (the only source of the
+  account identity — see `webhooks`), not on the per-request auth token.
+- **`installId` identifies a specific install** — it's the handle you build an API client from, but
+  it **may change**, so don't treat it as an immortal key for account-permanent data.
+- **`installDataId` — a per-install data-scoping key you derive (get-or-create)**, not the raw
+  install id. Its purpose is a **clean wipe on a fresh (re)install**: scope an install's working data
+  to it so reinstalling starts fresh instead of inheriting stale rows.
 
-- On the first authenticated request for an install, look it up in your store; if absent, create
-  the record now and stamp a data-scoping key (e.g. the install id plus a first-seen marker you
-  generate). Every later request reuses the stored one.
-- **Scope all records to that key**, keyed on **normalized** resource IDs.
+When you add persistence:
+
+- On install (or lazily, on the first authenticated request for an install), get-or-create the
+  install record and stamp its `installDataId` (e.g. the install id plus a first-seen marker you
+  generate). Capture `accountId`, `accountName`, and `platform` from the install webhook.
+- **Scope wipe-on-reinstall records to `installDataId`; scope account-permanent records to
+  `accountId`** — both keyed on **normalized** resource IDs.
+- **The identity fields the install webhook delivers always arrive and are never null — model them as
+  non-nullable columns.** The only `null` is a version-mismatch sentinel on `platform`/`status` you
+  fail loud on, never a stored value.
 - Build this indirection in from the start of any persistence work — retrofitting it is painful.
-  (Cleanly rotating the key on reinstall may require an uninstall/reinstall signal the platform
-  doesn't always provide — treat the rotation half as a `TODO(verify)` against your platform's
-  webhook capabilities.)
 
-The install identifier (for API auth) and the data-scoping key (for your storage) are **different
-values from different sources** — see the "Two IDs" note in `embed-and-auth`, and
-`peek-backoffice-api` for how the key is derived on the canonical platform.
+The install identifier (for API auth), the account id (for permanence), and the data-scoping key
+(for wipe-on-reinstall) are **different values from different sources** — see the "Two IDs" note in
+`embed-and-auth`, `webhooks` for the install-webhook identity, and `peek-backoffice-api` for how the
+keys are derived on the canonical platform.
 
 ## A platform data gotcha to always verify: wall-clock time
 

@@ -40,6 +40,7 @@ describe('verifyPeekAuthToken', () => {
     return jwt.sign(
       {
         iss: 'app_registry_v2',
+        aud: 'Joken',
         sub: 'install-abc-123',
         exp: Math.floor(Date.now() / 1000) + 3600,
         display_version: '1.0',

@@ -121,17 +121,32 @@ exposes IDs with a display/canonical split, confirm the exact rule from the inst
 
 ## `installDataId` — scope persisted data (when you add a DB)
 
-The install model is **brand-agnostic**: every platform hands the app an `installId` on the
-verified token, and the install ID **does not rotate** across uninstall→reinstall. So keying your
-own data on `installId` alone means a reinstalled app inherits **stale data**.
+The install model is **brand-agnostic**, but the identifiers differ in **permanence**:
 
-Phase 0 ships no database. **When you add persistence:** scope every row to an **`installDataId`**
-you derive yourself — get-or-create it on the first authenticated request from `auth.installId`
-(there is no `auth.installDataId`; you mint and store it). ACME **does** receive an install
-lifecycle signal — the **install-status webhook** (see `acme-webhooks`) — which is where
-uninstall/reinstall handling (minting a fresh `installDataId`, wiping prior data) can hang once its
-payload shape is confirmed (`TODO(verify)`). Build the `installDataId` indirection in from the start
-of any persistence work — retrofitting it is painful.
+- **`accountId` (a.k.a. the partner id) is the permanent anchor** — consistent across installs, it
+  does not change. **Key anything that must survive an uninstall→reinstall on `accountId`.**
+- **`installId` identifies a specific install** — the verified token hands it to the app on every
+  request and it's the handle you build a client from, but it **may change**, so don't use it as an
+  immortal key for account-permanent data.
+- `accountId`, `accountName`, and `platform` are **not** in the request token — they arrive only on
+  the **install-status webhook** (see `acme-webhooks`), which ACME **does** receive. That delivery is
+  the single source of account identity; persist it on install.
+
+Phase 0 ships no database. **When you add persistence:**
+
+- **Mint your own `installDataId`** (an install-time marker, e.g. `installId` + a first-seen stamp)
+  and **scope working data to it** — get-or-create it on the first authenticated request from
+  `auth.installId` (there is no `auth.installDataId`; you mint and store it). Its purpose is a
+  **clean wipe on a fresh (re)install**: hang that on the install-status webhook (mint a new
+  `installDataId`, drop the old install's data). The package now models the install payload
+  (`parseInstallWebhook` → `InstallWebhook`), so this no longer waits on an unconfirmed shape.
+- **These identity fields always arrive and are never null — model them as non-nullable columns**
+  (`installId`, `accountId`, `accountName`, `platform`, `isTest`); the only `null` is the
+  version-mismatch sentinel on `platform`/`status`, which you fail loud on and resolve before
+  writing.
+
+Build the `installDataId` indirection in from the start of any persistence work — retrofitting it is
+painful.
 
 ## Security & PII
 
