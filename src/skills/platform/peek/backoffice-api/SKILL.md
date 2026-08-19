@@ -149,9 +149,10 @@ Three identifiers matter, and they differ in **permanence** — key your data on
 **Where each comes from.** Every authenticated request's verified token gives you `installId` (+ the
 acting user) — see the "What's in the token" note in `peek-embed-and-auth` — but **not** `accountId`.
 `accountId`, `accountName`, and `platform` arrive **only** on the **install webhook**, which this kit
-now scaffolds (`app/examples/webhooks/install-status/route.ts`; verify + parse with
-`parseInstallWebhook` — see `peek-webhooks`). That delivery is the single source of the account
-identity; persist it on install.
+now scaffolds (`app/examples/webhooks/install-status/route.ts`; on JavaScript, verify + parse with
+the SDK's (`@peektravel/app-utilities`) `parseInstallWebhook` — on a non-JS stack there is no such
+package, so replicate it by hand per the roll-your-own in `webhooks` — see `peek-webhooks`). That
+delivery is the single source of the account identity; persist it on install.
 
 Phase 0 has no database, so there's nothing to scope yet. **When you add persistence:**
 

@@ -133,8 +133,10 @@ Phase 0 ships no database. **When you add persistence:**
   and **scope working data to it** — get-or-create it on the first authenticated request from
   `auth.installId` (there is no `auth.installDataId`; you mint and store it). Its purpose is a
   **clean wipe on a fresh (re)install**: hang that on the install-status webhook (mint a new
-  `installDataId`, drop the old install's data). The package now models the install payload
-  (`parseInstallWebhook` → `InstallWebhook`), so this no longer waits on an unconfirmed shape.
+  `installDataId`, drop the old install's data). On JavaScript, the SDK (`@peektravel/app-utilities`)
+  verifies + parses that delivery with `parseInstallWebhook` → `InstallWebhook`; **on a non-JS stack
+  (Python, etc.) there is no such package — replicate it by hand** (verify the signed JWT, read the
+  JSON body), following the roll-your-own steps and wire-format examples in `webhooks`.
 - **These identity fields always arrive and are never null — model them as non-nullable columns**
   (`installId`, `accountId`, `accountName`, `platform`, `isTest`); the only `null` is the
   version-mismatch sentinel on `platform`/`status`, which you fail loud on and resolve before
