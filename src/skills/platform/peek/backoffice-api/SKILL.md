@@ -134,39 +134,61 @@ Store, compare, and key caches/lookups on the canonical form; use display form o
 humans. These IDs **never change**, so they're your stable keys. Mixing formats causes duplicate
 or missed records.
 
-## `installDataId` — scope persisted data (when you add a DB)
+## Identity & scoping persisted data (when you add a DB)
 
-Peek passes three identifiers: **user ID** (who's acting), **partner/account ID** (the account),
-and **install ID** (unique account+app). The **install ID does NOT rotate** — an
-uninstall→reinstall yields the *same* install ID. So keying data on the install ID alone means a
-reinstalled app inherits **stale data**.
+Three identifiers matter, and they differ in **permanence** — key your data on the right one:
+
+- **`accountId` (a.k.a. the partner id) is the permanent anchor** — consistent across installs of the
+  app for that account, it **does not change**. **Anything that must survive an uninstall→reinstall —
+  anything tied to the Peek account — key on `accountId`.**
+- **`installId` identifies a specific install** (account + app). It is consistent for a given install
+  **but may change** — do **not** treat it as an immortal key for account-permanent data. It *is* the
+  handle you build a service client from — together with the install's **`apiUrl`** (below).
+- **`apiUrl` — the per-install back-office endpoint** (`api.url`). Persist it and build this install's
+  `PeekAccessService` against it **as given**, not a hardcoded/app-level URL (see "Build the client
+  from `apiUrl`" below).
+- **user id** — who's acting on a given request (embed pipeline only).
+
+**Where each comes from.** Every authenticated request's verified token gives you `installId` (+ the
+acting user) — see the "What's in the token" note in `peek-embed-and-auth` — but **not** `accountId`.
+`accountId`, `accountName`, `platform`, **`apiUrl`**, and `timezone` arrive **only** on the **install
+webhook**, which this kit now scaffolds (`app/examples/webhooks/install-status/route.ts`; on
+JavaScript, verify + parse with the SDK's (`@peektravel/app-utilities`) `parseInstallWebhook` — on a
+non-JS stack there is no such package, so replicate it by hand per the roll-your-own in `webhooks` —
+see `peek-webhooks`). That delivery is the single source of the account identity **and the endpoint**;
+persist it on install.
 
 Phase 0 has no database, so there's nothing to scope yet. **When you add persistence:**
 
-- Conceptually, `installDataId` = **install ID + an install-time marker**, stored as
-  **`currentInstallDataId`** on an account object; **scope all records to `installDataId`**.
+- **`installDataId` — mint your own per-install marker** (`installId` + an install-time stamp),
+  stored as e.g. **`currentInstallDataId`** on the install/account record, and **scope working data to
+  it**. Its purpose is a **clean wipe on a fresh (re)install**: on reinstall, mint a new
+  `installDataId` and drop everything under the old one so the app starts fresh. (Account-permanent
+  data instead lives under `accountId` and is meant to *survive*.)
+- **Hang install-lifecycle handling on the install webhook, as a full-snapshot upsert by `installId`.**
+  On install/update, upsert the account/install record (capturing `accountId`, `accountName`,
+  `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh `installDataId`; on
+  uninstall, tear down / mark for wipe. Every event redelivers the full record, so **overwrite `apiUrl`
+  each time** — a later `update_installed` can move it. You can still lazily get-or-create on the first
+  authenticated request from `auth.installId` for the install handle, but `accountId`/`apiUrl` only
+  become available once the install webhook has fired.
 
-**Where it comes from in this starter: you derive it lazily — there is no install event that
-hands it to you.** This kit ships **no install webhook**, so nothing fires "on install" to mint
-the ID. Instead, **get-or-create it on the first authenticated request**: take `auth.installId`
-off the verified token (the *only* install identifier you're given — see the "What's in the
-token" note in `peek-embed-and-auth`), look it up in your store, and if absent, create the record
-now and stamp its `installDataId` (e.g. `installId` + a first-seen timestamp you generate). Every
-later request reuses the stored one. Don't wait for an install callback — it won't come.
+**Build the client from `apiUrl`.** To act on an install, construct its `PeekAccessService` from the
+persisted **`apiUrl`** — pass it as the config's `apiUrl` (used *as given*), or hand the whole record
+to **`createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`** which
+wires it. The config's **`baseUrl`/`appId`/`mode` are deprecated** (they rebuild the URL from a
+hardcoded gateway default that can't be right for every install); `apiUrl` takes precedence, and the
+**hardcoded fallback will be removed — a URL will become required**, so source it from the webhook now.
 
-- **Reinstall rotation is a `TODO(verify)` until an uninstall/reinstall signal exists.** The
-  clean-slate-on-reinstall behavior — mint a *new* `installDataId` on reinstall, wipe everything
-  tied to the prior one — **requires an uninstall (or reinstall) webhook this starter does not yet
-  receive.** Without it, a get-or-create keyed on `installId` alone will **reuse the old record on
-  reinstall** (stale data inherited), because the install ID doesn't rotate. Until that signal is
-  wired, treat the wipe/rotation as unimplemented: note it, and check whether an uninstall webhook
-  is available to hang it on (the package's `docs/webhooks.md` + types and `peek-webhooks`);
-  `TODO(verify)` if it's not there.
+**These identity fields always arrive on the install delivery and are never null — model them as
+non-nullable columns** (`installId`, `accountId`, `accountName`, `platform`, `isTest`). `apiUrl` and
+`timezone` may be `""` on a given delivery, so keep the last non-empty value. The only `null` is the
+version-mismatch sentinel on `platform`/`status` (an unrecognized wire value) — fail loud on it and
+resolve it before writing; never persist the null.
 
-Build the `installDataId` indirection in from the start of any persistence work — retrofitting it
-is painful — even while the rotation half stays a TODO. For the exact install-payload field names
-for the three IDs, check the installed package types + `docs/` (`javascript-app-utilities`);
-`TODO(verify)` anything not pinned there.
+Build the `installDataId` indirection in from the start of any persistence work — retrofitting it is
+painful. For exact install-payload field names, check the installed package types + `docs/`
+(`javascript-app-utilities`); `TODO(verify)` anything not pinned there.
 
 ## Security & PII
 

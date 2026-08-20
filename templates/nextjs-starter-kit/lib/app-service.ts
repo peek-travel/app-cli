@@ -25,9 +25,13 @@ export type AppAccessService =
  * Token verification is brand-agnostic — one peek-auth JWT is minted for every
  * platform — so the `platform` claim is the single thing that decides which
  * gateway a request should talk to. Verify once (upstream), branch here.
+ *
+ * The token's `user` block — and its `platform` — are nullable (a session token
+ * needn't name a user), so guard `auth.user?.platform` and fail loud in the
+ * default rather than assuming a platform.
  */
 export function createAppService(auth: PeekAuthTokenClaims): AppAccessService {
-  switch (auth.user.platform) {
+  switch (auth.user?.platform) {
     case "peek":
       return createPeekService(auth);
     case "cng":
@@ -35,6 +39,6 @@ export function createAppService(auth: PeekAuthTokenClaims): AppAccessService {
     case "acme":
       return createAcmeService(auth);
     default:
-      throw new Error(`No app service for platform: ${auth.user.platform}`);
+      throw new Error(`No app service for platform: ${auth.user?.platform ?? "none"}`);
   }
 }

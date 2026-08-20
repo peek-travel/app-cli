@@ -93,9 +93,18 @@ The verified claims are **smaller than people assume**. `PeekAuthTokenClaims` is
 type PeekAuthTokenClaims = {
   installId: string;        // which install is acting — the ONLY field you build the service from
   displayVersion: string;   // the app version Peek loaded
-  user: { /* acting user identity — PII; don't log */ };
+  user: {                   // acting user identity — PII; don't log
+    platform: "peek" | "cng" | "acme" | null;   // may be null — branch with a fail-loud default
+    // + email / id / isAdmin / locale / name — all `| null`
+  } | null;                 // ← 0.7.x: the whole `user` block is nullable too
 };
 ```
+
+As of 0.7.x the token's **`user` block — and every field on it, including `platform` — is nullable**
+(a valid session token needn't name a user). So when `createAppService` branches on
+`auth.user?.platform`, guard it and **fail loud** if it's absent, rather than assuming a platform.
+**`user.id` is the signed-in person's own id — NOT the account/partner id;** never key account-scoped
+data on it (the account id has one source, the install webhook — see `webhooks`).
 
 **`installDataId` is NOT in the token.** This trips people up because this skill and
 `peek-backoffice-api` both tell you to *scope persisted data by `installDataId`* — which reads
@@ -140,42 +149,46 @@ the load-bearing fact behind every non-embedded server path: **public (non-embed
 background / reconciliation** jobs.
 
 **Recipe: an install-scoped client with no user token.** Add a sibling to `createPeekService`
-that takes the `installId` directly. Both construct the exact same service:
+that takes the install's `installId` **and its persisted `apiUrl`** — the per-install endpoint the
+install webhook delivered (`api.url`) and you stored:
 
 ```ts
 // lib/peek-service.ts
-export function createPeekServiceForInstall(installId: string): PeekAccessService {
+export function createPeekServiceForInstall(installId: string, apiUrl: string): PeekAccessService {
   const env = parseEnv();
   return new PeekAccessService({
     installId,
+    apiUrl,                       // the install's OWN endpoint (from the webhook, persisted) — used as given
     jwtSecret: env.PEEK_APP_SECRET,
     issuer: env.PEEK_APP_ID,
-    appId: env.PEEK_APP_ID,
     gatewayKey: env.PEEK_APP_ID,
-    baseUrl: env.PEEK_API_URL,
-    mode: "v2",
   });
 }
-
-// createPeekService(auth) can then just delegate:
-//   export const createPeekService = (auth: PeekAuthTokenClaims) =>
-//     createPeekServiceForInstall(auth.installId);
 ```
+
+Or skip the platform `switch` entirely with the SDK factory:
+`createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })` (see
+`peek-backoffice-api`).
 
 ```ts
 // e.g. a public route / cron job — no x-peek-auth header, no token gate
-import { createPeekServiceForInstall } from "@/lib/peek-service";
-
-const peek = createPeekServiceForInstall(installId); // installId from YOUR store
-const activities = await peek.getAllActivities();    // full install-scoped API access
+const install = await installs.get(installId);   // { installId, apiUrl, platform, … } from YOUR store
+const peek = createPeekServiceForInstall(install.installId, install.apiUrl);
+const activities = await peek.getAllActivities();
 ```
 
-**Guardrails.** This bypasses user-identity checks by design, so the `installId` must come from a
+**Endpoint = the install's `apiUrl`, not a hardcoded URL.** Each install has its own back-office
+endpoint; source it from the persisted install (the webhook's `apiUrl`), for **both** this
+server-to-host path **and** the embed pipeline's `createPeekService(auth)` — look the install's
+`apiUrl` up by `auth.installId`. The config's `baseUrl`/`appId`/`mode` are **deprecated** (a hardcoded
+gateway default) and will be removed. *(Until this starter has a DB it falls back to the app-level
+`PEEK_API_URL`; wire the per-install `apiUrl` in once you persist installs.)*
+
+**Guardrails.** This bypasses user-identity checks by design, so `installId`/`apiUrl` must come from a
 trusted server-side source (your DB, a verified webhook), **never** from a query param or request
 body a caller can forge. The browser-token pipeline is still correct for *embedded* API routes:
-it proves *which* install the live user belongs to. Use `createPeekServiceForInstall` for the
-paths where there is no live user. `PeekAccessService` and `verifyPeekAuthToken` come from the
-JS SDK — see `javascript-app-utilities` for the package/paths.
+it proves *which* install the live user belongs to. `PeekAccessService` and `verifyPeekAuthToken` come
+from the JS SDK — see `javascript-app-utilities`.
 
 ## The files that own each piece
 

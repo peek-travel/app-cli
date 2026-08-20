@@ -14,7 +14,7 @@ The POST flow (`app/examples/peek-pro/main/route.ts`) exists only because `page.
 
 **NEVER use `react-dom/server` in route handlers.** Next.js blocks it at the bundler level. Route handlers that return raw HTML use string templates — that is the correct pattern here, not JSX.
 
-**Odyssey light-DOM slotting:** wrap dynamically/conditionally rendered children of container components (`ody-two-column`, `ody-panel`, `ody-modal`, …) in a stable `<div>` present from the first render — children appended after the element upgrades are not re-slotted and render invisibly (passes lint/typecheck/tests; fails only in a browser). See the `odyssey-ui` skill.
+**Odyssey light-DOM slotting:** dynamically/conditionally rendered children of container components (`ody-two-column`, `ody-panel`, `ody-modal`, …) reconcile fine — the host forwards `appendChild`/`insertBefore`/`removeChild`/`replaceChild` to the slot, so conditional/keyed/`.map()`-ed children work **without** a stable `<div>` wrapper. (Older guidance to add that wrapper was a workaround for a since-fixed bug; it's harmless but unnecessary.) See the `odyssey-ui` skill.
 
 **Keep the MCP tools in sync with new features.** If this app ships an MCP endpoint (`app/examples/peek-pro/mcp` — most apps do; see the `peek-mcp-endpoint` skill), then whenever you add or change a user-facing capability that's meaningful to expose, add or update the matching MCP tool in the *same* change, reusing the same service-layer function the UI uses. A new UI action with no corresponding tool — or a tool left pointing at old behavior — is drift the App Store assistant will act on incorrectly. (Skip only if the app has deliberately no MCP endpoint.)
 

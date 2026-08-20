@@ -4,11 +4,12 @@ description: >-
   How to receive and handle Connect&GO (cng) webhooks in a starter-kit app — today that means the
   platform-agnostic install-status webhook (install/uninstall lifecycle), NOT booking/waiver
   parsers (those are peek-only). Use when adding or changing the endpoint that reacts to an app
-  being installed/uninstalled on cng, or any future cng event. Covers verifying the delivery with
-  requirePeekWebhookAuth (the same registry-signed peek-auth JWT, tolerant of a null user), the
-  unconfirmed install-status payload, idempotency/installDataId scoping, and acting on an event via
-  an install-scoped cng client. Triggers on "cng webhook", "install-status", "install/uninstall
-  event", "requirePeekWebhookAuth", "app_registry_webhook", "react to a cng install".
+  being installed/uninstalled on cng, or any future cng event. Covers verifying + parsing the delivery
+  with parseInstallWebhook (it verifies the signed app_registry_v2 JWT and merges the JSON body into a
+  flat InstallWebhook), what identity to persist (accountId/partnerId is permanent, installId may
+  change, persist platform + accountName) and how permanent each is, idempotency/installDataId scoping,
+  and acting on an event via an install-scoped cng client. Triggers on "cng webhook", "install-status",
+  "parseInstallWebhook", "install/uninstall event", "app_registry_webhook", "react to a cng install".
 ---
 
 # Connect&GO (cng) webhooks — receiving events
@@ -35,74 +36,96 @@ declared in `app.cng.json` as the `app_registry_webhook@v1` registry extendable 
 `app/examples/webhooks/install-status/route.ts`. This same endpoint serves every platform — the
 `account.platform` field on the payload tells you which one fired it.
 
+Unlike booking/waiver, the install lifecycle **does** have a package helper, and it is
+**platform-agnostic** (not Peek-only): **`parseInstallWebhook(token, body, secret)`** verifies the
+signed token and merges it with the JSON body into one flat `InstallWebhook` (`installId`, `accountId`
+— **a.k.a. the partner id** — `accountName`, `platform`, `timezone`, **`apiUrl`**, `isTest`, `status`,
+`displayVersion`, `user`). Use it rather than hand-parsing — see `javascript-app-utilities`.
+
 > **Not yet fully handled.** The shipped endpoint **verifies + logs** the delivery; real handling
-> ("do X on install/uninstall") is left to you, and the exact payload shape is **unconfirmed** —
-> `TODO(verify)` it against a real delivery before depending on any field.
+> ("do X on install/uninstall") is left to you.
 
-## Authenticating the delivery — `requirePeekWebhookAuth`, not `verifyPeekAuthToken`
+## Verifying + parsing the delivery — `parseInstallWebhook`
 
-cng POSTs the **same registry-signed peek-auth JWT** the API pipeline uses, in the `x-peek-auth`
-header. But **do not reuse the library's `verifyPeekAuthToken`** here: that helper assumes a user
-context and throws on `user: null`, and **install-status events are system events with no user.**
-
-So the starter verifies the delivery itself against the same secret and scheme —
-`lib/webhook-auth.ts` exports **`requirePeekWebhookAuth(request)`**, which checks the signature,
-the `app_registry_v2` **issuer**, the `Joken` **audience**, and expiry, while tolerating a null
-user. Missing/invalid token → **401**.
+The install delivery carries **two payloads at once**: a signed `app_registry_v2` JWT (in the
+`x-peek-auth` header) and a plain JSON body. **`parseInstallWebhook(token, body, secret)` verifies the
+token** (signature, `app_registry_v2` issuer, `Joken` audience, expiry — pass the app's
+`PEEK_APP_SECRET`) and **merges** it with the body, so you no longer hand-roll JWT verification. It
+**throws on verification failure** → one `try/catch` → **401**. It also tolerates the `user: null`
+that system-initiated install events carry.
 
 ```ts
 // app/examples/webhooks/install-status/route.ts
-import { requirePeekWebhookAuth } from "@/lib/webhook-auth";
+import { parseInstallWebhook, type InstallWebhook } from "@peektravel/app-utilities";
+import { parseEnv } from "@/lib/env";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const result = requirePeekWebhookAuth(request);
-  if ("error" in result) return result.error;   // 401 on bad/missing token
+  const header = request.headers.get("x-peek-auth");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : header ?? "";
 
-  const body = JSON.parse(await request.text()) as InstallStatusPayload;
-  // ... react to body.status for body.account.platform === "cng"
+  let event: InstallWebhook;
+  try {
+    event = parseInstallWebhook(token, await request.text(), parseEnv().PEEK_APP_SECRET);
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); // bad/forged token
+  }
+  // ... react to event.status for event.platform === "cng"
   return NextResponse.json({ ok: true });
 }
 ```
 
-## The payload (unconfirmed — `TODO(verify)`)
+> **Version note.** Earlier package versions split the install webhook across `parseInstallEvent`
+> (**removed** in 0.7.0) and `verifyInstallWebhook` (**deprecated**); `parseInstallWebhook` supersedes
+> both — verifying *and* merging in one call. If you're on an older scaffold that hand-rolled JWT
+> verification in a `lib/webhook-auth.ts`, that helper is no longer needed — `parseInstallWebhook`
+> verifies for you.
 
-The shipped type is a best-effort placeholder; confirm against a real delivery:
+## The payload — the body is the event, the token authenticates it
 
-```ts
-type InstallStatusPayload = {
-  status?: string;         // e.g. install / uninstall (values TODO(verify))
-  install_id?: string;     // the install this event is about — your stable key
-  display_version?: string;
-  account?: { id?: string; name?: string; platform?: string; is_test?: boolean };
-};
-```
+A valid token authenticates the **whole delivery**, so the **JSON body is the source of the event
+data** and is trusted within the verified request; the token backs up `installId` / `accountId` /
+`status` / `displayVersion` / `user` when the body omits them. The exact wire shapes (token claims +
+body JSON, including `api.url`, `account.timezone`, `modified_by`) are in `webhooks`.
 
 - **No payload query to register** (unlike Peek's booking webhook, whose payload is shaped by a
-  registered field selection). The shape is fixed by the registry, not shaped by a query you provide.
-- `account.platform` distinguishes peek / cng / acme on this shared endpoint.
-- `account.is_test` flags a test/sandbox account — you may want to skip or branch on it.
+  registered field selection). The shape is fixed by the registry.
+- **`accountId` (the partner id) is the permanent anchor** for account-scoped data; **`installId`
+  identifies a specific install and may change** — don't treat it as an immortal key (full model in
+  `webhooks` / `cng-backoffice-api`).
+- **Persist `apiUrl`** — the per-install back-office endpoint (`api.url`). Build this install's
+  `CngAccessService` against it (as given), **never a hardcoded URL**; it can change on an
+  `update_installed`, so refresh it every event.
+- **Persist `platform`** — it selects the access service (cng vs peek vs acme) on this shared
+  endpoint — plus **`timezone`** (the account's own zone) and **`accountName`** (debugging).
+- `isTest` flags a test/sandbox account — you may want to skip or branch on it.
+- `installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → **non-nullable columns**;
+  `apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value.
 
 ## Endpoint rules
 
-- **Authenticating the delivery is YOUR responsibility** — always run `requirePeekWebhookAuth`
-  before trusting the body.
+- **Verify before trusting the delivery** — `parseInstallWebhook` throws unless the token's signature,
+  issuer, audience, and expiry all check out; a `try/catch` → **401** is your gate.
 - **Acknowledge fast, process safely, be idempotent** — assume at-least-once delivery (generic
   discipline in `webhooks`). Install/uninstall can be redelivered; make handling repeat-safe.
-- **Scope any stored data to `installDataId`**, derived from `install_id` (the install ID does not
-  rotate — see `cng-backoffice-api`). Install-status is the natural place to hang install-lifecycle
-  handling: on install, get-or-create the install record; on uninstall, mint a fresh
-  `installDataId` / wipe prior data on the next reinstall (`TODO(verify)` the exact `status`
-  values first).
-- **To *act* on an event** (call cng in response), build an install-scoped client from the
-  `install_id` on the payload — `createCngServiceForInstall(install_id)` (see the server-to-cng
-  recipe in `cng-embed-and-auth`). Do **not** use the user-token pipeline — there is no user here.
+- **Every event is a full snapshot — upsert by `installId`.** Install-status is the natural place to
+  hang lifecycle handling: on install/update, upsert the install/account record (capturing `accountId`,
+  `accountName`, `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh
+  `installDataId`; on uninstall, tear down / wipe the prior install's data. Key account-permanent data
+  on `accountId`; scope wipe-on-reinstall working data to the `installDataId` you mint (see
+  `cng-backoffice-api`). **Fail loud on an unknown `status`** — a 2xx is treated as delivered and not
+  redelivered, so a coerced unknown drops the transition.
+- **To *act* on an event** (call cng in response), build an install-scoped client **from the stored
+  `platform` + `apiUrl`** — `createAccessServiceForInstall({ platform, apiUrl, installId }, config)`,
+  or `createCngServiceForInstall(installId, apiUrl)` (see the server-to-cng recipe in
+  `cng-embed-and-auth`). Use the install's own `apiUrl`, not a hardcoded endpoint. Do **not** use the
+  user-token pipeline — there is no user here.
 
 ## Future cng events
 
 If cng later ships event-specific parsers or additional webhooks, they'll appear in the installed
 package (types + `docs/webhooks.md`) — introspect it (`javascript-app-utilities`) and pull the live
 doc; **don't hand-write or assume a parser that isn't there.** Today, install-status is the only
-cng-relevant webhook, and you parse its JSON yourself.
+cng-relevant webhook, and you verify + parse it with `parseInstallWebhook`.
 
 ## Related skills
 

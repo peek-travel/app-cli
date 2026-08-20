@@ -58,12 +58,17 @@ The unified wrapper lives in `lib/with-app.ts`. It verifies the brand-agnostic t
 
 ```ts
 // lib/app-service.ts (excerpt) — the branch that picks the gateway
-switch (auth.user.platform) {
+switch (auth.user?.platform) {          // user — and platform — can be null; see below
   case "peek": return createPeekService(auth);
   case "cng":  return createCngService(auth);   // ← cng lands here
   case "acme": return createAcmeService(auth);
+  default:     throw new Error(`No app service for platform: ${auth.user?.platform ?? "none"}`);
 }
 ```
+
+As of 0.7.x the token's **`user` block — and every field on it, including `platform` — is
+nullable** (a valid session token needn't name a user, and unknown values normalize to `null`). So
+guard `auth.user?.platform` and **fail loud in `default`** rather than assuming a platform.
 
 A route lives under exactly one platform's tree, so it already **knows** which accessor it gets —
 name the concrete type at the call site and skip runtime narrowing:
@@ -104,9 +109,16 @@ The verified claims are exactly `PeekAuthTokenClaims` (shared across platforms):
 type PeekAuthTokenClaims = {
   installId: string;        // which install is acting — the ONLY field you build the service from
   displayVersion: string;
-  user: { platform: "peek" | "cng" | "acme"; /* + email/id/isAdmin/locale/name — PII, don't log */ };
+  user: {                   // ← nullable as a whole, and every field is nullable
+    platform: "peek" | "cng" | "acme" | null;   // may be null — branch with a fail-loud default
+    // + email / id / isAdmin / locale / name — all `| null`; PII, don't log
+  } | null;
 };
 ```
+
+**`user.id` is the signed-in person's own user id — NOT the account/partner id.** Never key
+account-scoped data on it; the account id (`accountId` / partnerId) has only one source, the install
+webhook (see `webhooks` / `cng-backoffice-api`).
 
 **`installDataId` is NOT in the token.** It's a data-scoping key you derive yourself (get-or-create
 lazily on the first authenticated request, keyed off `auth.installId`) — see `cng-backoffice-api`.
@@ -117,21 +129,27 @@ To build a cng client you need **`installId`**; to scope rows in your own DB you
 
 `createCngService` reads only `installId` off the claims — everything else is your app's own
 secret/config, and `CngAccessService` **mints its own API tokens** from `installId` +
-`PEEK_APP_SECRET`. So **any `installId` you have persisted lets you build a fully functional,
-install-scoped cng client server-side**, with no user token and no browser in the loop. Add a
-sibling that takes the `installId` directly:
+`PEEK_APP_SECRET`. So **a persisted install (its `installId` + `apiUrl`) lets you build a fully
+functional, install-scoped cng client server-side**, with no user token and no browser in the loop.
+Add a sibling that takes the `installId` **and the install's persisted `apiUrl`** (the per-install
+endpoint from the install webhook — `api.url`):
 
 ```ts
-export function createCngServiceForInstall(installId: string): CngAccessService {
+export function createCngServiceForInstall(installId: string, apiUrl: string): CngAccessService {
   const env = parseEnv();
   return new CngAccessService({
-    installId, jwtSecret: env.PEEK_APP_SECRET, issuer: env.PEEK_APP_ID,
-    appId: env.PEEK_APP_ID, baseUrl: env.PEEK_API_URL,
+    installId, apiUrl, jwtSecret: env.PEEK_APP_SECRET, issuer: env.PEEK_APP_ID,
   });
 }
 ```
 
-**Guardrail:** the `installId` must come from a trusted server-side source (your DB, a verified
+Or use the SDK factory: `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret,
+issuer })`. **Use the install's own `apiUrl`, not a hardcoded endpoint** — the config's
+`baseUrl`/`appId`/`mode` are **deprecated** and the hardcoded fallback will be removed (see
+`cng-backoffice-api`). *(Until this starter has a DB it falls back to the app-level `PEEK_API_URL`;
+wire the per-install `apiUrl` in once you persist installs.)*
+
+**Guardrail:** `installId`/`apiUrl` must come from a trusted server-side source (your DB, a verified
 webhook — see `cng-webhooks`), **never** from a query param or request body a caller can forge.
 Use this for webhooks, cron/background jobs, and non-embedded pages.
 

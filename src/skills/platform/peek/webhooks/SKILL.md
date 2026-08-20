@@ -1,15 +1,17 @@
 ---
 name: peek-webhooks
 description: >-
-  How to receive and handle Peek Pro webhooks (booking events and waiver events) in a starter-kit
-  app — the concrete Peek delivery, registration/config split, and parsers. Use when adding an
-  endpoint that reacts to something happening in Peek — a booking created/changed/cancelled, a
-  waiver signed — for waitlist, abandoned-booking, dynamic-pricing, or sync features. Covers the
-  registry/config split, parsing with parseBookingWebhook / parseWaiverWebhook, verifying the
-  delivery yourself, and Peek's "booking events carry state, not change" specifics. Always pull the
-  live webhook doc first — the config/query/parser signatures change. Triggers on "Peek webhook",
-  "booking event", "waiver event", "parseBookingWebhook", "parseWaiverWebhook", "handle a booking",
-  "react to a booking", "waiver signed".
+  How to receive and handle Peek Pro webhooks (booking, waiver, and install/uninstall lifecycle
+  events) in a starter-kit app — the concrete Peek delivery, registration/config split, and parsers.
+  Use when adding an endpoint that reacts to something happening in Peek — a booking
+  created/changed/cancelled, a waiver signed — or handling the install-status webhook that tells the
+  app who an install belongs to. Covers the registry/config split, parsing with parseBookingWebhook /
+  parseWaiverWebhook, verifying-and-merging the install delivery with parseInstallWebhook (signed JWT
+  + JSON body), verifying the delivery yourself, install-identity persistence, and Peek's
+  "booking events carry state, not change" specifics. Always pull the live webhook doc first — the
+  config/query/parser signatures change. Triggers on "Peek webhook", "booking event", "waiver event",
+  "install webhook", "install-status", "parseBookingWebhook", "parseWaiverWebhook", "parseInstallWebhook",
+  "handle a booking", "react to a booking", "waiver signed", "who is this install".
 ---
 
 # Peek Pro webhooks — receiving events
@@ -23,9 +25,12 @@ Webhooks are Peek → your endpoint, "something happened." This is a **different
 the peek-auth API pipeline — here *you* verify the delivery came from Peek; there is no peek-auth
 token (contrast `peek-embed-and-auth`).
 
-> **Not yet scaffolded.** Phase 0 of this starter kit ships no webhook endpoint. This skill is how
-> you add one. Build it as a Next.js Route Handler under `app/examples/peek-pro/` (JSON/string
-> responses only, no `react-dom/server` — see `javascript-nextjs`).
+> **What's scaffolded vs. not.** The kit **does** ship one webhook endpoint — the **install-status**
+> handler at `app/examples/webhooks/install-status/route.ts` (declared in `app.peek.json`), which
+> verifies + logs install/uninstall deliveries. The **booking and waiver** endpoints are **not**
+> scaffolded — this skill is how you add them, as Next.js Route Handlers under
+> `app/examples/peek-pro/` (JSON/string responses only, no `react-dom/server` — see
+> `javascript-nextjs`).
 
 ## Always pull the live webhook doc first
 
@@ -44,7 +49,10 @@ live web doc — don't guess.
 
 ## What's available today
 
-Two webhooks: **booking events** and **waiver events**.
+Three webhook helpers in the package: **booking events** (`parseBookingWebhook`), **waiver events**
+(`parseWaiverWebhook`), and the **install/uninstall lifecycle** (`parseInstallWebhook`, which verifies
+the signed `app_registry_v2` JWT and merges it with the JSON body into one flat `InstallWebhook`).
+Booking/waiver are covered below; the install lifecycle has its own section further down.
 
 ## The wiring has two halves that must agree
 
@@ -113,6 +121,52 @@ Fires when a **waiver agreement signature is created** (`agreement_signature_cre
   `installDataId`). For new-vs-seen logic use the same seen-before pattern on a stable identifier
   (check the package types / `docs/` for the waiver's ID field; a referenced booking's
   booking/order IDs stay stable).
+
+## Install / uninstall lifecycle webhook
+
+Separate from booking/waiver, Peek's app registry fires an **install lifecycle webhook** on
+install / uninstall / update. **This kit scaffolds it** — `app/examples/webhooks/install-status/route.ts`
+(declared in `app.peek.json`), today verifying + logging the delivery. It is the **only** place the
+app learns **who an install belongs to** (the account behind it); no back-office read and no
+peek-auth token returns the account id, so what you persist here is all you get. The generic model,
+the wire format, and the identity-persistence rules live in `webhooks` — read them; don't re-derive
+here.
+
+**The delivery carries two payloads at once** — a signed `app_registry_v2` JWT and a plain JSON body.
+One helper handles both:
+
+- **`parseInstallWebhook(token, body, secret)` → `InstallWebhook`** — verifies the token
+  (signature / `app_registry_v2` issuer / `Joken` audience / expiry — pass the app's `jwtSecret`) and
+  reads the event from the body, **falling back to the token** for the fields it also carries. It
+  **throws on verification failure**, so a bad delivery is a single `try/catch` → `401`; you no longer
+  hand-roll JWT verification. **Trust model:** a valid token authenticates the *whole* delivery, so the
+  **body is the source of event data** and is trusted within a verified request; the token backs up
+  `installId` / `accountId` / `status` / `displayVersion` / `user` when the body omits them. The
+  scaffolded endpoint reads the JWT from the `x-peek-auth` header and passes it + the raw body to
+  `parseInstallWebhook`.
+
+> **0.7.x helper.** `parseInstallEvent` was **removed** and `verifyInstallWebhook` is **deprecated**
+> (token-only); the return is flat (`event.accountId`, not `event.identity.accountId`). Use
+> `parseInstallWebhook`.
+
+**Fail loud on an unknown `status` or `platform`.** Both come back `null` when this SDK version
+doesn't recognize the wire value (kept on `rawStatus`); give each a `default:` branch that returns a
+`500` so Peek redelivers. A 2xx is treated as delivered and **not** redelivered, so coercing an
+unknown `status` silently drops a lifecycle transition and defaulting an unknown `platform` points
+the install at the wrong gateway.
+
+**What to persist** (full model in `webhooks`): key **account-permanent data on `accountId`/partnerId**
+(consistent across installs, never changes); treat **`installId`** as the handle for a specific install
+that **may change**; mint an **`installDataId`** to scope working data so a fresh reinstall wipes
+cleanly; **persist `platform`** (selects the access service), **`timezone`** (the account's own zone),
+**`accountName`** (debugging), and — critically — **`apiUrl`: the per-install back-office endpoint
+(`api.url`). Persist it and build this install's `PeekAccessService` against it (as given), never a
+hardcoded URL.** **Every event is a full snapshot: upsert by `installId` and overwrite** — an
+`update_installed` can deliver a new `apiUrl`, and a stale one calls the wrong endpoint.
+`installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → non-nullable columns;
+`apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value. To build the client from a
+stored install, `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`
+wires the URL for you — see `peek-backoffice-api`.
 
 ## Related skills
 

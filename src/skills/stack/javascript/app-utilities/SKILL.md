@@ -102,6 +102,101 @@ on Peek). Design rule of thumb: **keep the default and only opt into `true` when
 customers or move money** (see `backoffice-data`, `app-builder`). Full spec: the package's `llms.txt`
 "Access options / PII" section + the installed types.
 
+## Webhook helpers — including the install / lifecycle webhook
+
+The package ships **pure-transform parsers** for inbound deliveries plus one **verify-and-merge**
+helper for the install webhook. Confirm the exact names, signatures, and return shapes in the
+installed `dist/index.d.ts` + `docs/webhooks.md` (they're version-specific):
+
+| Helper | Delivery | Auth |
+| --- | --- | --- |
+| `parseBookingWebhook(body)` → `Booking` | booking create/update (GraphQL-shaped payload) | you verify |
+| `parseWaiverWebhook(body, options?)` → `Waiver` | waiver signed (fixed payload; PII via `fullCustomerAccess`) | you verify |
+| `parseInstallWebhook(token, body, secret)` → `InstallWebhook` | install/uninstall/update — **signed JWT + JSON body** | **it verifies** |
+
+The two `parse*Webhook(body)` parsers are pure (no auth, no network, construct nothing), tolerate the
+delivery envelope / a bare node / a JSON string, and **never throw on malformed input** (empty fields
+instead) — so **you** must authenticate those deliveries and validate the fields you use.
+`parseInstallWebhook` is different: the install delivery carries a **signed `app_registry_v2` JWT and
+a JSON body at once**, so this helper verifies the token (HMAC signature, expiry, `app_registry_v2`
+issuer, `Joken` audience — pass the app's `jwtSecret` as `secret`; give it the raw `x-peek-auth`
+header value, `Bearer ` prefix and all) and reads the event from the body, **falling back to the
+token** for the fields it also carries, returning one flat `InstallWebhook`. It throws on any
+verification failure — one `try/catch` → `401`. The generic model (and wire-format examples for non-JS
+apps that must roll their own) is in `webhooks`.
+
+> **Version note (0.7.x).** `parseInstallWebhook(token, body, secret)` replaced the earlier helpers:
+> **`parseInstallEvent` was removed** and **`verifyInstallWebhook` is deprecated** (token-only — it
+> can't report `accountName`/`platform`/`timezone`/`apiUrl`/`isTest`). The return is **flat**: read
+> `event.accountId`, not `event.identity.accountId`.
+
+### The install webhook is where the app learns *who it belongs to* (and where to call it)
+
+The install delivery is the **only** source of the account identity **and the per-install `apiUrl`** —
+no back-office read and no peek-auth token returns them. `parseInstallWebhook` returns a flat,
+JSON-safe `InstallWebhook` meant to be **persisted as a unit**. Trust model: the **JSON body is the
+source of the event data**; the **verified token authenticates the whole delivery** and is the
+**fallback** for the fields it also carries (so a body that omits `installId`/`accountId`/`status`/
+`displayVersion`/`user` uses the token's value). Because the token authenticates the request, the body
+is trusted within it.
+
+| Field | Source | Notes on permanence / use |
+| --- | --- | --- |
+| `accountId` | body → token | **a.k.a. the partner ID** (two names, one value). **Permanent** — consistent across installs, never changes. **Key any account-permanent data on this**, not on the install id. |
+| `installId` | body → token | Identifies a specific install (platform + app + account). Consistent for that install **but may change** — the handle you build a server-to-host client from, not an immortal key. |
+| `apiUrl` | body | **The per-install back-office API endpoint** (`api.url`). **Persist it and pass it as the client's `apiUrl`** — use it *as given* (do not decompose/append); never a hardcoded endpoint. `""` when a delivery omits it (keep the last stored value). **It can change on `update_installed`.** |
+| `platform` | body | `"peek" \| "cng" \| "acme"` — **persist per install.** Decides which access service / APIs / features; two installs can differ; only source is this webhook. `null` if unrecognized — **fail loud**, don't default (wrong gateway). |
+| `timezone` | body | Account's IANA zone (e.g. `America/New_York`) — **persist**; date/time logic needs the account's zone, not the server's. `""` when omitted. |
+| `accountName` | body | **Always persist it** — no functional role, but makes debugging far easier than opaque ids. |
+| `isTest` | body | Whether the install is a test account. |
+| `status` / `rawStatus` | body → token | `status` ∈ `installed` / `uninstalled` / `update_installed` (`null` if unrecognized); `rawStatus` is always the wire value. |
+| `displayVersion` | body → token | App version at the event. |
+| `user` | body → token | Acting user (body's `modified_by`), or `null` for system-initiated events (most uninstalls). |
+
+**Give `status` and `platform` a `default:` branch that fails loudly** — the platform treats any 2xx
+as delivered and does not redeliver, so a coerced unknown drops a lifecycle transition permanently.
+`installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → **non-nullable columns**;
+`apiUrl`/`timezone` may be `""` on a given delivery, so keep the last non-empty value.
+
+### Every event is a full snapshot — upsert by `installId`; build the client from `apiUrl`
+
+**Every install event carries the complete current record** — an `update_installed` redelivers the
+same fields as `installed`, which is how the registry pushes changes (a new `apiUrl`, a rename, a
+version bump). **Upsert by `installId` and overwrite** — ignoring `update_installed` leaves you with a
+**stale `apiUrl`** calling the wrong endpoint.
+
+To act on a persisted install, **`createAccessServiceForInstall(install, config)`** builds the right
+client from `install.platform` + `install.apiUrl` in one call (no `switch` on platform, no URL
+wiring); it throws if `platform` is `null`/unrecognized. `install` is any `{ platform, apiUrl,
+installId }` (the webhook event or your stored record); `config` is the per-app
+`{ jwtSecret, issuer, gatewayKey?, … }`.
+
+```ts
+import { parseInstallWebhook, createAccessServiceForInstall } from '@peektravel/app-utilities';
+
+const event = parseInstallWebhook(token, body, secret);        // verify + read
+await installs.upsert(event.installId, {                       // full-snapshot upsert
+  accountId: event.accountId, accountName: event.accountName,
+  platform: event.platform, timezone: event.timezone,
+  apiUrl: event.apiUrl,      // may change between events — always take the latest
+  isTest: event.isTest, displayVersion: event.displayVersion,
+});
+
+// later, to call the install's back office:
+const svc = createAccessServiceForInstall(await installs.get(id), { jwtSecret, issuer });
+```
+
+> **Source the endpoint from `apiUrl`, not `baseUrl`/`appId`.** The access-service config's
+> `baseUrl`/`appId`/`mode` are **deprecated** — they reconstruct the URL from a **hardcoded gateway
+> default** that can't be right for every install. `apiUrl` (the install webhook's `api.url`) takes
+> precedence and is used *as given*. **The hardcoded fallbacks will be removed and a URL will become
+> required**, so persist and pass `apiUrl` now.
+
+Beyond `accountId`/`installId`, still **mint your own `installDataId`** (an install-time marker) to
+scope an install's working data so a fresh reinstall wipes cleanly — see `webhooks` and
+`backoffice-data`. The full persistence model lives in `webhooks`; concrete usage in your platform's
+`*-webhooks` / `*-backoffice-api` skill.
+
 ## Related skills
 
 - **backoffice-data** — the generic discipline: official SDK only (never raw HTTP/GraphQL),
@@ -112,3 +207,5 @@ customers or move money** (see `backoffice-data`, `app-builder`). Full spec: the
 - **javascript-odyssey-ui** — the Odyssey UI theme that ships inside this same package.
 - **javascript-nextjs** / **peek-mcp-endpoint** — where the Node-only constraint forces the Node
   runtime.
+- **webhooks** (global) / **peek-webhooks** — the inbound model these parsers/verifier serve,
+  including the install/lifecycle webhook and the identity-persistence rules the helpers here feed.

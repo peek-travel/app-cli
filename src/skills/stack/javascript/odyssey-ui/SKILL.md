@@ -77,8 +77,8 @@ Then use `<ody-*>` tags in your `"use client"` components.
 - **Events → `CustomEvent`:** `el.addEventListener(type, e => e.detail)`. In React you can also
   pass handlers like `onClick` for simple cases (see the shipped `view/page.tsx`).
 - **Content → light-DOM children:** the component renders your child nodes.
-- **Wrap page/settings UI in `<ody-page-container>`** — the standard responsive wrapper
-  (~868px narrow / ~1310px wide).
+- **Wrap page/settings UI in `<ody-app-page-container>`** — the standard responsive wrapper
+  (~868px narrow / ~1310px wide). (`<ody-page-container>` is the deprecated full-bleed predecessor.)
 
 ## Rich data & reflected getter-only attributes must be set via a ref (React-19 gotcha)
 
@@ -158,42 +158,31 @@ between versions (v0.2.5 has ≈175 names across both sets, ≈53 of them brand 
 `refresh`, `calendar` — plus common ones like `plus`, `minus`, `check`, `search`, `edit`,
 `delete`, `download`, `export`, `info-filled`, `copy`, `link`, `mail`, `user`, `notifications`.
 
-## Dynamically-added children need a stable wrapper (light-DOM gotcha)
+## Dynamic children reconcile without a wrapper (light-DOM slotting)
 
-These are **light-DOM** components: some (notably container/layout ones like `ody-two-column`,
-`ody-two-column-secondary`, `ody-panel`, `ody-modal`) slot their child nodes **once, when the
-element upgrades**, and do **not** re-slot children a framework appends *afterward*. So a child you
-render **conditionally** (`{open && <Detail/>}`) directly inside such a component can stay
-**invisible** — the element upgraded with that child absent and never picked it up.
-
-The tell: content that's present on first render works, but content added later (on click, after a
-fetch, on selection) shows up in React's tree yet never appears on screen. Lint/typecheck/tests all
-pass — this only reproduces in a real browser.
-
-**Rule: give the component a stable child that's present from the first render, and let your
-framework mutate *inside* it.** Wrap dynamic/conditional content in a plain `<div>`:
+These are **light-DOM** components: they render your child nodes into an internal `[data-ody-slot]`
+placeholder. Even though your children are physically relocated there, **the host element forwards
+the standard child-mutation calls** (`appendChild` / `insertBefore` / `removeChild` /
+`replaceChild`) to the slot. So a framework reconciler that adds, removes, reorders, or swaps a
+**direct** child of a slotting/container element (`ody-two-column`, `ody-two-column-secondary`,
+`ody-panel`, `ody-modal`, …) operates on the slot correctly — **conditional (`{open && <Detail/>}`),
+keyed, and `.map()`-ed children all reconcile** without a `NotFoundError` and without vanishing.
+**You do *not* need to wrap dynamic children in a stable `<div>`.**
 
 ```tsx
-// ❌ ReviewDetail is appended to the custom element only after a click — not re-slotted.
+// ✅ Conditional / late-added children reconcile directly — no wrapper needed.
 <ody-two-column-secondary>
   <ody-two-column-secondary-header title="Details" />
   {selected && <ReviewDetail item={selected} />}
 </ody-two-column-secondary>
-
-// ✅ The <div> is slotted once on upgrade; React owns everything inside it.
-<ody-two-column-secondary>
-  <ody-two-column-secondary-header title="Details" />
-  <div>{selected && <ReviewDetail item={selected} />}</div>
-</ody-two-column-secondary>
 ```
 
-(A list already inside a stable wrapper `<div>` works for the same reason — the wrapper, not the
-rows, is what the component slots.) Toggling **attributes** on these components (e.g.
-`secondary-open`) is fine; it's dynamically-added **children** that need the wrapper.
-
-> The component list above is illustrative, not exhaustive — it was diagnosed from symptoms, not
-> the Odyssey source. If a given container component *does* observe late-added children (e.g. via a
-> `MutationObserver`/slot), it won't have this problem; when in doubt, verify in a real browser.
+> **Version note.** Older starter guidance told you to wrap dynamic children in a stable `<div>` — a
+> workaround for a since-fixed slotting bug. As of the current `@peektravel/app-utilities` that
+> wrapper is **no longer necessary** (it's harmless if you already have one, but don't add new ones
+> for this reason). The authority is the installed `docs/ui.md` §"Content = light-DOM children"; if a
+> child ever renders in the framework tree but not on screen, re-check that doc and verify in a real
+> browser.
 
 ## Theming / tokens
 
@@ -201,6 +190,12 @@ Override design tokens in CSS rather than hardcoding brand colors: `--color-<nam
 `--color-interaction-300`), typography `--ody-font-family` / `--ody-font-weight-*`, layout
 `--layout-top-bar-height`, `--ody-shadow-base`. Some components accept inline color via attributes
 (e.g. `bar-color="var(--color-success-300)"`).
+
+**Spacing & layout tokens** (`tokens.css`) — reach for these instead of magic numbers so spacing
+stays consistent: `--gap8` / `--gap16` (the default gap) / `--gap24` / `--gap32`, and the two settings
+widths `--layout-page-width-narrow` (`868px` — design for this first) / `--layout-page-width-wide`
+(`1310px`). `ody-app-page-container` and `ody-section-*` already bake these in (via `gap-size` /
+`spacing` attributes).
 
 ## No app chrome — the host frames your app
 
@@ -210,12 +205,25 @@ Embedded views render **inside the platform's iframe**, and the host already dra
 - **No app-name header or title bar** at the top of the view. It's redundant with the host chrome,
   pushes your real UI down, and reads as non-native. **Open straight into what the app does** — the
   first thing in the frame is the app's actual content and controls.
-- Wrap the content in `<ody-page-container>` (per the conventions above) and start with the real
-  UI. A heading for the *current view's* content is fine; an app-level banner/title is not.
+- Wrap the content in **`<ody-app-page-container>`** — the standard responsive page wrapper for an
+  app settings UI (it bakes in a responsive gutter, tightening to `--gap16` at/below the 868px narrow
+  width; pass `flush` for edge-to-edge). **`<ody-page-container>` is deprecated** (full-bleed
+  predecessor) — use `ody-app-page-container`. Start with the real UI; a heading for the *current
+  view's* content is fine, an app-level banner/title is not.
 
 This is the *embedded* surface. A separate admin/developer surface you own (rendered outside the
 host) can have whatever chrome you like. The underlying reason is platform-agnostic — the host owns
 the chrome, not just identity; see `embed-and-auth`.
+
+## User-facing copy: never say "reload the page"
+
+The app lives **inside the host's iframe**, so there is no page the user can reload — the browser's
+reload acts on the *host* page, not your frame, and users have no address bar or refresh control for
+it. So **never write copy that tells the user to "reload"/"refresh the page"** (in error states,
+empty-state CTAs, "try again" prompts, toasts, or recovery instructions). Instead tell them to
+**"close and reopen the app"** (or reopen it from where they launched it) — that's the gesture that
+actually re-runs the app in the iframe. Prefer an in-app retry/refresh action wired to a button when
+one fits; fall back to "close and reopen the app" for anything a control can't recover.
 
 ## The mockup workflow (step 2 of the build)
 
@@ -224,7 +232,7 @@ Before building the real UI, make the design concrete with an **interactive sing
 
 1. Copy `mockup-template.html` (in this folder) into the project as `index.html`. It wires the
    **CDN** Odyssey includes (mockups are standalone, so CDN — not the npm package) and scaffolds
-   `<ody-page-container>` + an `<ody-tabs>` variant area.
+   `<ody-app-page-container>` + an `<ody-tabs>` variant area.
 2. Build the proposed UI in it from what you've learned; tell the user to open it in a browser and
    react. **Don't mock an app-name header or title bar** — the host provides it around the frame
    (see "No app chrome" above); the mockup opens straight into the app's content.
