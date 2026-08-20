@@ -126,11 +126,14 @@ The install model is **brand-agnostic**, but the identifiers differ in **permane
 - **`accountId` (a.k.a. the partner id) is the permanent anchor** — consistent across installs, it
   does not change. **Key anything that must survive an uninstall→reinstall on `accountId`.**
 - **`installId` identifies a specific install** — the verified token hands it to the app on every
-  request and it's the handle you build a client from, but it **may change**, so don't use it as an
-  immortal key for account-permanent data.
-- `accountId`, `accountName`, and `platform` are **not** in the request token — they arrive only on
-  the **install-status webhook** (see `acme-webhooks`), which ACME **does** receive. That delivery is
-  the single source of account identity; persist it on install.
+  request; it's the handle you build a client from (together with the install's `apiUrl`), but it
+  **may change**, so don't use it as an immortal key for account-permanent data.
+- **`apiUrl` — the per-install back-office endpoint** (`api.url`). Persist it and build this install's
+  `AcmeAccessService` against it **as given**, not a hardcoded/app-level URL.
+- `accountId`, `accountName`, `platform`, **`apiUrl`**, and `timezone` are **not** in the request
+  token — they arrive only on the **install-status webhook** (see `acme-webhooks`), which ACME **does**
+  receive. That delivery is the single source of account identity **and the endpoint**; persist it on
+  install and refresh it on every event (an `update_installed` can move `apiUrl`).
 
 Phase 0 ships no database. **When you add persistence:**
 
@@ -142,10 +145,17 @@ Phase 0 ships no database. **When you add persistence:**
   verifies + parses that delivery with `parseInstallWebhook` → `InstallWebhook`; **on a non-JS stack
   (Python, etc.) there is no such package — replicate it by hand** (verify the signed JWT, read the
   JSON body), following the roll-your-own steps and wire-format examples in `webhooks`.
+- **Treat each event as a full-snapshot upsert by `installId`** — capture `accountId`, `accountName`,
+  `platform`, `timezone`, and **`apiUrl` (always the latest)**, overwriting the stored values, so a
+  later `update_installed` can't leave you on a stale `apiUrl`.
+- **Build the client from `apiUrl`.** Construct `AcmeAccessService` with the persisted `apiUrl`, or use
+  **`createAccessServiceForInstall({ platform, apiUrl, installId }, config)`**. The config's
+  `baseUrl`/`appId`/`mode` are **deprecated** (hardcoded gateway default) and will be removed —
+  source the URL from the webhook's `apiUrl`.
 - **These identity fields always arrive and are never null — model them as non-nullable columns**
-  (`installId`, `accountId`, `accountName`, `platform`, `isTest`); the only `null` is the
-  version-mismatch sentinel on `platform`/`status`, which you fail loud on and resolve before
-  writing.
+  (`installId`, `accountId`, `accountName`, `platform`, `isTest`); `apiUrl`/`timezone` may be `""` on a
+  delivery, so keep the last stored value. The only `null` is the version-mismatch sentinel on
+  `platform`/`status`, which you fail loud on and resolve before writing.
 
 Build the `installDataId` indirection in from the start of any persistence work — retrofitting it is
 painful.

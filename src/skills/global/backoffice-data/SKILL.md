@@ -85,12 +85,21 @@ Platforms pass several identifiers (who is acting, which account, which install)
 - **`installDataId` — a per-install data-scoping key you derive (get-or-create)**, not the raw
   install id. Its purpose is a **clean wipe on a fresh (re)install**: scope an install's working data
   to it so reinstalling starts fresh instead of inheriting stale rows.
+- **`apiUrl` — the per-install API endpoint you persist and call.** The install webhook gives each
+  install its own back-office endpoint URL; persist it and use it **as given** when building that
+  install's client, **not a hardcoded/app-level endpoint** (the hardcoded fallback is deprecated). It
+  can change on an `update_installed` event, so refresh it every delivery. Also persist `platform`
+  (selects the client class) and `timezone` (the account's own zone for date/time handling).
 
 When you add persistence:
 
 - On install (or lazily, on the first authenticated request for an install), get-or-create the
   install record and stamp its `installDataId` (e.g. the install id plus a first-seen marker you
-  generate). Capture `accountId`, `accountName`, and `platform` from the install webhook.
+  generate). Capture `accountId`, `accountName`, `platform`, `apiUrl`, and `timezone` from the
+  install webhook — it is their only source.
+- **Treat every install event as a full-snapshot upsert keyed by `installId`** — overwrite the stored
+  `apiUrl` / name / version / platform with the incoming values, so a later `update_installed` can't
+  leave you calling a **stale `apiUrl`** (the wrong endpoint).
 - **Scope wipe-on-reinstall records to `installDataId`; scope account-permanent records to
   `accountId`** — both keyed on **normalized** resource IDs.
 - **The identity fields the install webhook delivers always arrive and are never null — model them as

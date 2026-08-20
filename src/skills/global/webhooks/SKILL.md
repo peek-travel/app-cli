@@ -85,70 +85,79 @@ No back-office read and no user-token returns the account id, so **whatever you 
 delivery is all you will ever have.** Handle it (provision on install, tear down on uninstall) and
 persist the identity it carries.
 
-It arrives as **one POST carrying two payloads at once**, with a **split trust model** — and you use
-**both**:
+It arrives as **one POST carrying two payloads at once**, and you use **both**:
 
-- **A signed `app_registry_v2` JWT** — the **security boundary** *and* the **authoritative identity**.
-  Verifying its signature proves the delivery came from the platform. It carries `installId`,
-  `accountId`, `status`, `displayVersion`, and the acting `user`.
-- **A plain JSON body** — the **enrichment** channel, and the *only* source of `accountName`,
-  `platform`, and `isTest`. It is **unsigned**, so trust it *only* for those three fields.
+- **A signed `app_registry_v2` JWT** — the **security boundary**. Verifying its signature is what
+  proves the delivery came from the platform; **it authenticates the whole request, body included**
+  (only the platform can mint a valid one). It also carries `installId`, `accountId`, `status`,
+  `displayVersion`, and the acting `user`.
+- **A plain JSON body** — the **event payload**, and the source of the event data: the full account
+  block (`name`, `platform`, `timezone`, `is_test`), the per-install **`api.url`**, the acting user
+  (`modified_by`), and `install_id` / `status` / `display_version`.
 
-The four fields present in **both** (`installId`, `accountId`, `status`, `displayVersion`) must be
-read from the **verified token, never the body** — so a forged or mismatched body can never override
-an authenticated identity.
+**Trust model:** verify the token *first*; because a valid token authenticates the whole delivery, the
+**body is trusted within a verified request**. Read the event data from the **body**, and for the few
+fields the token *also* carries (`installId`, `accountId`, `status`, `displayVersion`, `user`) **fall
+back to the token** when the body omits them.
 
 **Recommended: use the SDK.** JS apps call `@peektravel/app-utilities`' `parseInstallWebhook(token,
-body, secret)` — it verifies the token and merges both payloads into one flat record in a single call
-(see `javascript-app-utilities`). **If you're not on JavaScript, replicate exactly what it does** —
-you must consume both payloads:
+body, secret)` — it verifies the token and reads the event (with token fallback) into one flat record
+in a single call (see `javascript-app-utilities`). **If you're not on JavaScript, replicate exactly
+what it does:**
 
 1. **Verify the JWT** (HS256, your app secret): check the signature, `iss === "app_registry_v2"`,
-   `aud === "Joken"`, and `exp`. Restrict the accepted algorithm to HS256. Any failure → **401** —
-   this is the only proof the delivery is really from the platform. (The token rides with the request;
-   confirm the exact header — e.g. `Authorization: Bearer …` or `x-peek-auth` — against a real
-   delivery.)
-2. **Read identity from the verified token** (authoritative): `installId` = `sub`, `accountId` =
-   `account.id` (a.k.a. partner id), `status`, `displayVersion` = `display_version`, `user` (nullable
-   — system events have none).
-3. **Read enrichment from the JSON body**, and *only* these: `accountName` = `account.name`,
-   `platform` = `account.platform`, `isTest` = `account.is_test`. Never take an identity field from
-   the body.
-4. **Validate the growable enums and fail loud** (below), then **persist as a unit** (further below).
+   `aud === "Joken"`, and `exp`. Restrict the accepted algorithm to HS256. The token arrives in the
+   **`x-peek-auth` request header** (strip a leading `Bearer ` if present). Any failure → **401** —
+   this authenticates the whole delivery.
+2. **Read the event from the JSON body:** `installId` = `install_id`, `accountId` = `account.id`
+   (a.k.a. partner id), `accountName` = `account.name`, `platform` = `account.platform`, `isTest` =
+   `account.is_test`, `timezone` = `account.timezone`, **`apiUrl` = `api.url`**, `status`,
+   `displayVersion` = `display_version`, `user` = `modified_by`.
+3. **Fall back to the token** for the fields it also carries (`installId` = `sub`, `accountId` =
+   `account.id`, `status`, `displayVersion` = `display_version`, `user`) when the body omits them.
+4. **Validate the growable enums and fail loud** (below), then **persist as a unit** and **use
+   `apiUrl` as the endpoint for this install's API calls** (both further below).
 
-**The signed token** — decoded `app_registry_v2` claims (`user` is `null` for system-initiated events
-such as most uninstalls):
+**The JSON body** — the event payload (the POST body):
 
 ```json
 {
-  "iss": "app_registry_v2",
-  "aud": "Joken",
-  "sub": "8bd8fa02-a496-4866-a00a-e327f5f7c2e6",
-  "exp": 1699999999,
   "status": "installed",
-  "display_version": "1.0.2",
-  "account": { "id": "1000001" },
-  "user": {
+  "api": { "url": "https://app-registry.sandbox.peeklabs.com/installations-api/your-app-dev" },
+  "account": {
+    "id": "4b52e9d2-7411-4d47-9100-71bebb55d151",
+    "name": "Oskar's Boat Tours",
+    "timezone": "America/New_York",
+    "is_test": true,
+    "platform": "peek"
+  },
+  "install_id": "cf34832d-16ea-4197-86fd-bf63e6917348",
+  "display_version": "1.0.3",
+  "modified_by": {
     "email": "jane@operator.com", "id": "user-xyz", "is_admin": true,
     "locale": "en", "name": "Jane Operator", "platform": "peek"
   }
 }
 ```
 
-**The JSON body** — the unsigned POST body:
+**The signed token** — decoded `app_registry_v2` claims. It authenticates the delivery and backs up
+the shared fields (`sub`, `account.id`, `status`, `display_version`, `user`); `api.url` / `timezone` /
+`name` / `platform` / `is_test` are **body-only**:
 
 ```json
 {
+  "iss": "app_registry_v2",
+  "aud": "Joken",
+  "sub": "cf34832d-16ea-4197-86fd-bf63e6917348",
+  "exp": 1699999999,
   "status": "installed",
-  "install_id": "8bd8fa02-a496-4866-a00a-e327f5f7c2e6",
-  "display_version": "1.0.2",
-  "account": { "id": "1000001", "name": "Demo Park", "platform": "peek", "is_test": true }
+  "display_version": "1.0.3",
+  "account": { "id": "4b52e9d2-7411-4d47-9100-71bebb55d151" },
+  "user": { "email": "jane@operator.com", "id": "user-xyz", "is_admin": true, "locale": "en", "name": "Jane Operator", "platform": "peek" }
 }
 ```
 
-The body repeats `status` / `install_id` / `display_version` / `account.id`, **but ignore those** —
-take them from the verified token; trust the body only for `account.name` / `account.platform` /
-`account.is_test`. Concrete field names are pinned by the SDK types — see `javascript-app-utilities`
+Concrete field names are pinned by the SDK types — see `javascript-app-utilities`
 (`parseInstallWebhook` → `InstallWebhook`) and `peek-webhooks`.
 
 ### Fail loud on an unknown status or platform
@@ -181,14 +190,38 @@ your data on the right one:
 - **`platform` — persist it per install.** It decides **which platform APIs / SDK client / features**
   the install is served by (peek vs cng vs acme), two installs of the same app can be on **different**
   platforms, and this webhook is its **only source**. Store it alongside `installId` / `accountId`.
+- **`apiUrl` — persist it per install, and use it as the API endpoint for this install's calls.** The
+  registry serves each install from its **own app endpoint URL** (`api.url`). Persist it and pass it
+  **as given** (unmodified — don't decompose it or append your own app id) when you build this
+  install's back-office client — **never a hardcoded or app-level endpoint.** It has no source other
+  than this webhook, and **it can change**: an `update_installed` event redelivers the full record with
+  a possibly-new `apiUrl`, so overwrite the stored value on every event. A client built against a
+  stale `apiUrl` sends its API calls to the **wrong endpoint**. (The app-level hardcoded gateway is a
+  deprecated fallback that will be removed — see `javascript-app-utilities` / your platform's
+  `*-backoffice-api`.)
+- **`timezone` — persist it per install.** The account's IANA zone (e.g. `America/New_York`).
+  Date/time handling for the install (scheduling, day boundaries, display) needs the **account's own
+  zone**, not the server's. Body-only, no other source.
 - **`accountName` — always persist it** from the install call. It has no functional role, but keeping
   it makes **debugging far easier** (logs/records name the account, not just opaque ids).
 
-**These identity fields always arrive on the install delivery and are never absent — model them as
-non-nullable columns** (`installId`, `accountId`, `accountName`, `platform`, `isTest`). The only
+**The identity fields always arrive on the install delivery and are never absent — model
+`installId` / `accountId` / `accountName` / `platform` / `isTest` as non-nullable columns.** The only
 `null` you will ever see is the **version-mismatch sentinel** on `platform` (and `status`) described
-above — a fail-loud condition you resolve *before* writing the row, never a value you persist. So a
-correctly-handled install never stores a null in any of these; don't model them as nullable.
+above — a fail-loud condition you resolve *before* writing the row, never a value you persist.
+(`apiUrl` and `timezone` default to `""` when a given delivery omits them — treat empty as "not
+reported this time" and **keep the last non-empty value you stored**, rather than overwriting with
+blank.)
+
+### Every install event is a full snapshot — upsert by `installId`
+
+An install webhook is **not** just a one-time "who is this install" signal. **Every event carries the
+complete, current record**, and an `update_installed` event delivers the *same fields* as the original
+`installed` event — that's how the registry pushes changes (a new `apiUrl`, a renamed account, a new
+`displayVersion`, even a platform move). So treat each delivery as an **upsert keyed by `installId`**
+and overwrite your stored fields with the incoming ones. A consumer that reads only the first
+`installed` event and ignores later `update_installed` deliveries keeps **stale data — most
+dangerously a stale `apiUrl`, sending its API calls to the wrong endpoint.**
 
 ## Stable keys
 

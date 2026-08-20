@@ -143,16 +143,20 @@ Three identifiers matter, and they differ in **permanence** — key your data on
   anything tied to the Peek account — key on `accountId`.**
 - **`installId` identifies a specific install** (account + app). It is consistent for a given install
   **but may change** — do **not** treat it as an immortal key for account-permanent data. It *is* the
-  handle you build a service client from (`createPeekServiceForInstall`).
+  handle you build a service client from — together with the install's **`apiUrl`** (below).
+- **`apiUrl` — the per-install back-office endpoint** (`api.url`). Persist it and build this install's
+  `PeekAccessService` against it **as given**, not a hardcoded/app-level URL (see "Build the client
+  from `apiUrl`" below).
 - **user id** — who's acting on a given request (embed pipeline only).
 
 **Where each comes from.** Every authenticated request's verified token gives you `installId` (+ the
 acting user) — see the "What's in the token" note in `peek-embed-and-auth` — but **not** `accountId`.
-`accountId`, `accountName`, and `platform` arrive **only** on the **install webhook**, which this kit
-now scaffolds (`app/examples/webhooks/install-status/route.ts`; on JavaScript, verify + parse with
-the SDK's (`@peektravel/app-utilities`) `parseInstallWebhook` — on a non-JS stack there is no such
-package, so replicate it by hand per the roll-your-own in `webhooks` — see `peek-webhooks`). That
-delivery is the single source of the account identity; persist it on install.
+`accountId`, `accountName`, `platform`, **`apiUrl`**, and `timezone` arrive **only** on the **install
+webhook**, which this kit now scaffolds (`app/examples/webhooks/install-status/route.ts`; on
+JavaScript, verify + parse with the SDK's (`@peektravel/app-utilities`) `parseInstallWebhook` — on a
+non-JS stack there is no such package, so replicate it by hand per the roll-your-own in `webhooks` —
+see `peek-webhooks`). That delivery is the single source of the account identity **and the endpoint**;
+persist it on install.
 
 Phase 0 has no database, so there's nothing to scope yet. **When you add persistence:**
 
@@ -161,16 +165,26 @@ Phase 0 has no database, so there's nothing to scope yet. **When you add persist
   it**. Its purpose is a **clean wipe on a fresh (re)install**: on reinstall, mint a new
   `installDataId` and drop everything under the old one so the app starts fresh. (Account-permanent
   data instead lives under `accountId` and is meant to *survive*.)
-- **Hang install-lifecycle handling on the install webhook.** On install, upsert the account/install
-  record (capturing `accountId`, `accountName`, `platform`) and stamp a fresh `installDataId`; on
-  uninstall, tear down / mark for wipe. You can still lazily get-or-create on the first authenticated
-  request from `auth.installId` for the install handle, but `accountId` only becomes available once
-  the install webhook has fired.
+- **Hang install-lifecycle handling on the install webhook, as a full-snapshot upsert by `installId`.**
+  On install/update, upsert the account/install record (capturing `accountId`, `accountName`,
+  `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh `installDataId`; on
+  uninstall, tear down / mark for wipe. Every event redelivers the full record, so **overwrite `apiUrl`
+  each time** — a later `update_installed` can move it. You can still lazily get-or-create on the first
+  authenticated request from `auth.installId` for the install handle, but `accountId`/`apiUrl` only
+  become available once the install webhook has fired.
+
+**Build the client from `apiUrl`.** To act on an install, construct its `PeekAccessService` from the
+persisted **`apiUrl`** — pass it as the config's `apiUrl` (used *as given*), or hand the whole record
+to **`createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`** which
+wires it. The config's **`baseUrl`/`appId`/`mode` are deprecated** (they rebuild the URL from a
+hardcoded gateway default that can't be right for every install); `apiUrl` takes precedence, and the
+**hardcoded fallback will be removed — a URL will become required**, so source it from the webhook now.
 
 **These identity fields always arrive on the install delivery and are never null — model them as
-non-nullable columns** (`installId`, `accountId`, `accountName`, `platform`, `isTest`). The only
-`null` is the version-mismatch sentinel on `platform`/`status` (an unrecognized wire value) — fail
-loud on it and resolve it before writing; never persist the null.
+non-nullable columns** (`installId`, `accountId`, `accountName`, `platform`, `isTest`). `apiUrl` and
+`timezone` may be `""` on a given delivery, so keep the last non-empty value. The only `null` is the
+version-mismatch sentinel on `platform`/`status` (an unrecognized wire value) — fail loud on it and
+resolve it before writing; never persist the null.
 
 Build the `installDataId` indirection in from the start of any persistence work — retrofitting it is
 painful. For exact install-payload field names, check the installed package types + `docs/`

@@ -10,7 +10,7 @@
    - scalars (strings/booleans) -> HTML attributes
    - rich data (arrays/objects)  -> set as JS properties on the element (el.columns = [...])
    - events are CustomEvents     -> addEventListener(..., e => e.detail)
-   - wrap page/settings UI in <ody-page-container>
+   - wrap page/settings UI in <ody-app-page-container>
   When unsure about a layout/flow, keep MULTIPLE variants in this one file (see the tabs
   below) so the user can compare, then collapse to the chosen direction.
 
@@ -46,7 +46,7 @@
     </style>
   </head>
   <body>
-    <ody-page-container>
+    <ody-app-page-container>
       <!--
         Variant comparison scaffold. Keep competing directions side-by-side in tabs while the
         design is unsettled; delete the tabs and keep one panel once the user has chosen.
@@ -64,7 +64,7 @@
           <ody-button variant="secondary">Secondary action</ody-button>
         </ody-tab>
       </ody-tabs>
-    </ody-page-container>
+    </ody-app-page-container>
 
     <script type="module">
       // Rich data goes on the element as a JS PROPERTY, not an attribute. Example:

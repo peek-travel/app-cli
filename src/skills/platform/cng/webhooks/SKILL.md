@@ -39,8 +39,8 @@ declared in `app.cng.json` as the `app_registry_webhook@v1` registry extendable 
 Unlike booking/waiver, the install lifecycle **does** have a package helper, and it is
 **platform-agnostic** (not Peek-only): **`parseInstallWebhook(token, body, secret)`** verifies the
 signed token and merges it with the JSON body into one flat `InstallWebhook` (`installId`, `accountId`
-— **a.k.a. the partner id** — `accountName`, `platform`, `isTest`, `status`, `displayVersion`,
-`user`). Use it rather than hand-parsing — see `javascript-app-utilities`.
+— **a.k.a. the partner id** — `accountName`, `platform`, `timezone`, **`apiUrl`**, `isTest`, `status`,
+`displayVersion`, `user`). Use it rather than hand-parsing — see `javascript-app-utilities`.
 
 > **Not yet fully handled.** The shipped endpoint **verifies + logs** the delivery; real handling
 > ("do X on install/uninstall") is left to you.
@@ -80,23 +80,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 > verification in a `lib/webhook-auth.ts`, that helper is no longer needed — `parseInstallWebhook`
 > verifies for you.
 
-## The payload — a split trust model
+## The payload — the body is the event, the token authenticates it
 
-The **verified token** is authoritative for `installId`, `accountId`, `status`, `displayVersion`, and
-`user`; the **unsigned JSON body** supplies only `accountName`, `platform`, `isTest`.
-`parseInstallWebhook` reads the shared fields from the token, so a forged or mismatched body can't
-override an authenticated identity. The exact wire shapes (token claims + body JSON) are in `webhooks`.
+A valid token authenticates the **whole delivery**, so the **JSON body is the source of the event
+data** and is trusted within the verified request; the token backs up `installId` / `accountId` /
+`status` / `displayVersion` / `user` when the body omits them. The exact wire shapes (token claims +
+body JSON, including `api.url`, `account.timezone`, `modified_by`) are in `webhooks`.
 
 - **No payload query to register** (unlike Peek's booking webhook, whose payload is shaped by a
   registered field selection). The shape is fixed by the registry.
 - **`accountId` (the partner id) is the permanent anchor** for account-scoped data; **`installId`
   identifies a specific install and may change** — don't treat it as an immortal key (full model in
   `webhooks` / `cng-backoffice-api`).
+- **Persist `apiUrl`** — the per-install back-office endpoint (`api.url`). Build this install's
+  `CngAccessService` against it (as given), **never a hardcoded URL**; it can change on an
+  `update_installed`, so refresh it every event.
 - **Persist `platform`** — it selects the access service (cng vs peek vs acme) on this shared
-  endpoint — and **`accountName`** for debugging.
+  endpoint — plus **`timezone`** (the account's own zone) and **`accountName`** (debugging).
 - `isTest` flags a test/sandbox account — you may want to skip or branch on it.
-- **These fields always arrive and are never null — model them as non-nullable columns.** The only
-  `null` is the version-mismatch sentinel on `platform`/`status`, which you fail loud on.
+- `installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → **non-nullable columns**;
+  `apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value.
 
 ## Endpoint rules
 
@@ -104,15 +107,18 @@ override an authenticated identity. The exact wire shapes (token claims + body J
   issuer, audience, and expiry all check out; a `try/catch` → **401** is your gate.
 - **Acknowledge fast, process safely, be idempotent** — assume at-least-once delivery (generic
   discipline in `webhooks`). Install/uninstall can be redelivered; make handling repeat-safe.
-- **Key account-permanent data on `accountId`; scope wipe-on-reinstall working data to a
-  `installDataId` you mint** (see `cng-backoffice-api`). Install-status is the natural place to hang
-  install-lifecycle handling: on install, upsert the install/account record (capturing `accountId`,
-  `accountName`, `platform`) and stamp a fresh `installDataId`; on uninstall, tear down / wipe the
-  prior install's data. **Fail loud on an unknown `status`** — a 2xx is treated as delivered and not
+- **Every event is a full snapshot — upsert by `installId`.** Install-status is the natural place to
+  hang lifecycle handling: on install/update, upsert the install/account record (capturing `accountId`,
+  `accountName`, `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh
+  `installDataId`; on uninstall, tear down / wipe the prior install's data. Key account-permanent data
+  on `accountId`; scope wipe-on-reinstall working data to the `installDataId` you mint (see
+  `cng-backoffice-api`). **Fail loud on an unknown `status`** — a 2xx is treated as delivered and not
   redelivered, so a coerced unknown drops the transition.
-- **To *act* on an event** (call cng in response), build an install-scoped client from
-  `event.installId` — `createCngServiceForInstall(event.installId)` (see the server-to-cng recipe in
-  `cng-embed-and-auth`). Do **not** use the user-token pipeline — there is no user here.
+- **To *act* on an event** (call cng in response), build an install-scoped client **from the stored
+  `platform` + `apiUrl`** — `createAccessServiceForInstall({ platform, apiUrl, installId }, config)`,
+  or `createCngServiceForInstall(installId, apiUrl)` (see the server-to-cng recipe in
+  `cng-embed-and-auth`). Use the install's own `apiUrl`, not a hardcoded endpoint. Do **not** use the
+  user-token pipeline — there is no user here.
 
 ## Future cng events
 

@@ -45,9 +45,9 @@ describe('requirePeekAuth', () => {
       const token = makeToken();
       const result = requirePeekAuth(makeRequest(`Bearer ${token}`));
       expect('error' in result).toBe(false);
-      const { auth } = result as { auth: { installId: string; user: { email: string } } };
+      const { auth } = result as { auth: { installId: string; user: { email: string } | null } };
       expect(auth.installId).toBe('install-abc-123');
-      expect(auth.user.email).toBe('user@example.com');
+      expect(auth.user?.email).toBe('user@example.com');
     });
 
     it('accepts a raw token without Bearer prefix', () => {

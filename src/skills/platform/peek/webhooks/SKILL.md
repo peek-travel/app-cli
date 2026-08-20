@@ -132,22 +132,22 @@ peek-auth token returns the account id, so what you persist here is all you get.
 the wire format, and the identity-persistence rules live in `webhooks` — read them; don't re-derive
 here.
 
-**The delivery carries two payloads at once** — a signed `app_registry_v2` JWT (the security boundary
-and authoritative identity) and a plain JSON body (enrichment: `accountName`, `platform`, `isTest`).
+**The delivery carries two payloads at once** — a signed `app_registry_v2` JWT and a plain JSON body.
 One helper handles both:
 
 - **`parseInstallWebhook(token, body, secret)` → `InstallWebhook`** — verifies the token
   (signature / `app_registry_v2` issuer / `Joken` audience / expiry — pass the app's `jwtSecret`) and
-  **merges** it with the JSON body into one flat record. It **throws on verification failure**, so a
-  bad/forged delivery is a single `try/catch` → `401`; you no longer hand-roll JWT verification. The
-  **verified token** is authoritative for `installId`, `accountId` (**a.k.a. the partner id**),
-  `status`, `displayVersion`, and `user`; the **unsigned body** supplies only `accountName`,
-  `platform`, `isTest` — a forged body can't override an authenticated id. The scaffolded endpoint
-  reads the JWT from the `x-peek-auth` header and passes it + the raw body to `parseInstallWebhook`.
+  reads the event from the body, **falling back to the token** for the fields it also carries. It
+  **throws on verification failure**, so a bad delivery is a single `try/catch` → `401`; you no longer
+  hand-roll JWT verification. **Trust model:** a valid token authenticates the *whole* delivery, so the
+  **body is the source of event data** and is trusted within a verified request; the token backs up
+  `installId` / `accountId` / `status` / `displayVersion` / `user` when the body omits them. The
+  scaffolded endpoint reads the JWT from the `x-peek-auth` header and passes it + the raw body to
+  `parseInstallWebhook`.
 
-> **0.7.0 replaced the older helpers.** `parseInstallEvent` was **removed** and `verifyInstallWebhook`
-> is **deprecated** (token-only — no name/platform/test); the return is now flat (`event.accountId`,
-> not `event.identity.accountId`). Migrate to `parseInstallWebhook`.
+> **0.7.x helper.** `parseInstallEvent` was **removed** and `verifyInstallWebhook` is **deprecated**
+> (token-only); the return is flat (`event.accountId`, not `event.identity.accountId`). Use
+> `parseInstallWebhook`.
 
 **Fail loud on an unknown `status` or `platform`.** Both come back `null` when this SDK version
 doesn't recognize the wire value (kept on `rawStatus`); give each a `default:` branch that returns a
@@ -155,13 +155,18 @@ doesn't recognize the wire value (kept on `rawStatus`); give each a `default:` b
 unknown `status` silently drops a lifecycle transition and defaulting an unknown `platform` points
 the install at the wrong gateway.
 
-**What to persist, and how permanent each id is** (full model in `webhooks`): key **account-permanent
-data on `accountId`/partnerId** (consistent across installs, never changes); treat **`installId`** as
-the handle for a specific install that **may change** (not an immortal key); mint an **`installDataId`**
-to scope working data so a fresh reinstall wipes cleanly; **persist `platform`** (it selects the
-access service) and **`accountName`** (for debugging). **These identity fields always arrive and are
-never null — model them as non-nullable columns**; the only `null` is the fail-loud `platform`/`status`
-sentinel above, which you resolve before writing.
+**What to persist** (full model in `webhooks`): key **account-permanent data on `accountId`/partnerId**
+(consistent across installs, never changes); treat **`installId`** as the handle for a specific install
+that **may change**; mint an **`installDataId`** to scope working data so a fresh reinstall wipes
+cleanly; **persist `platform`** (selects the access service), **`timezone`** (the account's own zone),
+**`accountName`** (debugging), and — critically — **`apiUrl`: the per-install back-office endpoint
+(`api.url`). Persist it and build this install's `PeekAccessService` against it (as given), never a
+hardcoded URL.** **Every event is a full snapshot: upsert by `installId` and overwrite** — an
+`update_installed` can deliver a new `apiUrl`, and a stale one calls the wrong endpoint.
+`installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → non-nullable columns;
+`apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value. To build the client from a
+stored install, `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`
+wires the URL for you — see `peek-backoffice-api`.
 
 ## Related skills
 

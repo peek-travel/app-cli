@@ -14,18 +14,24 @@ import { parseEnv } from '@/lib/env';
  * a bad/forged delivery is a single try/catch => 401, and we no longer hand-roll
  * JWT verification.
  *
- * The verified token is authoritative for `installId`, `accountId`, `status`,
- * `displayVersion`, and `user`; the unsigned body supplies only `accountName`,
- * `platform`, and `isTest`. This is the ONLY place the app learns who an install
- * belongs to — no back-office read returns the account id. A real app persists
- * the identity here: key account-permanent data on the permanent `accountId`,
- * mint an `installDataId` for wipe-on-reinstall, and store `platform` (it selects
- * the access service) and `accountName`. These fields are never null, so model
- * them as non-nullable columns. For now this endpoint only logs the delivery.
+ * The JSON body is the source of the event data; the verified token authenticates
+ * the whole delivery and backs up the fields it also carries (`installId`,
+ * `accountId`, `status`, `displayVersion`, `user`). This is the ONLY place the
+ * app learns who an install belongs to AND where to call it — no back-office read
+ * returns the account id or the endpoint. A real app persists the identity here:
+ * key account-permanent data on the permanent `accountId`, mint an `installDataId`
+ * for wipe-on-reinstall, and store `platform` (selects the access service),
+ * `accountName`, `timezone`, and — importantly — `apiUrl`, this install's own
+ * back-office endpoint. It should build the install's client against that stored
+ * `apiUrl` (not a hardcoded URL), and because every event is a full snapshot,
+ * upsert by `installId` and overwrite `apiUrl` each time (an `update_installed`
+ * can move it). This starter has no DB, so it just logs — and its per-request
+ * client still uses the app-level `PEEK_API_URL` (see lib/peek-service.ts) until
+ * you persist installs and pass each install's `apiUrl`.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const header = request.headers.get('x-peek-auth');
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : header ?? '';
+  // `parseInstallWebhook` strips a leading `Bearer ` for you, so pass the header as-is.
+  const token = request.headers.get('x-peek-auth') ?? '';
   const body = await request.text();
 
   let event: InstallWebhook;
@@ -38,15 +44,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const test = event.isTest ? ' [TEST]' : '';
   console.log(`\n📦 [install-status] ${event.rawStatus || 'unknown'}${test}`);
-  console.log(`   account : ${event.accountName} (id ${event.accountId}, ${event.platform ?? '?'})`);
+  console.log(`   account : ${event.accountName} (id ${event.accountId}, ${event.platform ?? '?'}, ${event.timezone || '?'})`);
   console.log(`   install : ${event.installId}`);
+  console.log(`   apiUrl  : ${event.apiUrl || '?'}`); // persist + call this per install (not a hardcoded endpoint)
   console.log(`   version : ${event.displayVersion || '?'}\n`);
 
   switch (event.status) {
     case 'installed':
     case 'update_installed':
-      // TODO: upsert the install/account record (accountId, accountName,
-      // platform) and stamp a fresh installDataId.
+      // TODO: upsert by event.installId (accountId, accountName, platform,
+      // timezone, apiUrl — always the latest) and stamp a fresh installDataId.
       break;
     case 'uninstalled':
       // TODO: tear down / wipe this install's data.

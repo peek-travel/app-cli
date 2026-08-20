@@ -27,9 +27,16 @@ An inbound webhook endpoint that Peek Pro POSTs to on install-lifecycle events
 (installed / uninstalled / updated). The delivery carries a signed
 `app_registry_v2` JWT (in the `x-peek-auth` header) plus a JSON body;
 `parseInstallWebhook` from `@peektravel/app-utilities` verifies the token and
-merges both into one flat `InstallWebhook`, so a bad/forged delivery is a single
+merges both into one flat `InstallWebhook`, so a bad delivery is a single
 `try/catch` → 401. For now it just logs the delivery — add real
 provisioning/teardown in the status `switch`.
+
+This is the only place the app learns **who an install belongs to and where to
+call it**: persist the identity (key permanent data on `accountId`), and — once
+you add a DB — persist each install's **`apiUrl`** and build that install's
+back-office client against it, refreshing it on every event (an
+`update_installed` can move it). Until then the per-request client uses the
+app-level `PEEK_API_URL`.
 
 - Route: `app/examples/webhooks/install-status/route.ts`
 - Point the app's install-status webhook URL at

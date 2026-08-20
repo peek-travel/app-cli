@@ -16,18 +16,23 @@ vi.mock('@/lib/env', () => ({
 
 const { POST } = await import('../route');
 
-// The signed `app_registry_v2` token carries the authoritative identity
-// (installId=sub, accountId=account.id, status, display_version, user).
+const INSTALL_ID = 'cf34832d-16ea-4197-86fd-bf63e6917348';
+const ACCOUNT_ID = '4b52e9d2-7411-4d47-9100-71bebb55d151';
+const API_URL =
+  'https://app-registry.sandbox.peeklabs.com/installations-api/google-things-to-do-integration-test-dev';
+
+// The signed `app_registry_v2` token authenticates the whole delivery and backs
+// up the fields the body also carries (sub, account.id, status, version, user).
 function makeToken(overrides: Record<string, unknown> = {}, secret = TEST_SECRET): string {
   return jwt.sign(
     {
       iss: 'app_registry_v2',
       aud: 'Joken',
-      sub: '8bd8fa02-a496-4866-a00a-e327f5f7c2e6',
+      sub: INSTALL_ID,
       exp: Math.floor(Date.now() / 1000) + 3600,
-      status: 'uninstalled',
-      display_version: '1.0.2',
-      account: { id: '1000001' },
+      status: 'installed',
+      display_version: '1.0.3',
+      account: { id: ACCOUNT_ID },
       user: null,
       ...overrides,
     },
@@ -36,16 +41,26 @@ function makeToken(overrides: Record<string, unknown> = {}, secret = TEST_SECRET
   );
 }
 
-// The unsigned JSON body is the enrichment channel — trusted only for the
-// account name / platform / test flag.
-const BODY = JSON.stringify({
-  status: 'uninstalled',
-  install_id: '8bd8fa02-a496-4866-a00a-e327f5f7c2e6',
-  display_version: '1.0.2',
-  account: { id: '1000001', name: 'Demo park', platform: 'cng', is_test: true },
-});
+// The JSON body is the source of the event data — including api.url, the account
+// block (with timezone), and modified_by.
+function makeBody(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    status: 'installed',
+    install_id: INSTALL_ID,
+    display_version: '1.0.3',
+    api: { url: API_URL },
+    account: {
+      id: ACCOUNT_ID,
+      name: "Oskar's Boat Tours",
+      timezone: 'America/New_York',
+      is_test: true,
+      platform: 'peek',
+    },
+    ...overrides,
+  });
+}
 
-function makeRequest(token: string | null, body: string = BODY): NextRequest {
+function makeRequest(token: string | null, body: string = makeBody()): NextRequest {
   const headers: Record<string, string> = {};
   if (token !== null) headers['x-peek-auth'] = token;
   return new NextRequest('http://localhost/examples/webhooks/install-status', {
@@ -66,6 +81,8 @@ describe('POST /examples/webhooks/install-status', () => {
     logSpy.mockRestore();
   });
 
+  const logged = () => logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+
   it('returns 401 when the token is missing', async () => {
     const res = await POST(makeRequest(null));
     expect(res.status).toBe(401);
@@ -84,38 +101,43 @@ describe('POST /examples/webhooks/install-status', () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it('logs identity — status/id/version from the token, name/platform/test from the body', async () => {
+  it('tolerates a `Bearer ` prefix on the header token', async () => {
+    const res = await POST(makeRequest(`Bearer ${makeToken()}`));
+    expect(res.status).toBe(200);
+  });
+
+  it('logs the event — including apiUrl and timezone from the body', async () => {
     await POST(makeRequest(makeToken()));
-    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-    expect(output).toContain('uninstalled'); // token status
-    expect(output).toContain('[TEST]'); // body is_test
-    expect(output).toContain('Demo park'); // body account.name
-    expect(output).toContain('1000001'); // token account.id
-    expect(output).toContain('8bd8fa02-a496-4866-a00a-e327f5f7c2e6'); // token sub
-    expect(output).toContain('1.0.2'); // token display_version
+    const out = logged();
+    expect(out).toContain('installed'); // status
+    expect(out).toContain('[TEST]'); // is_test
+    expect(out).toContain("Oskar's Boat Tours"); // account.name
+    expect(out).toContain(ACCOUNT_ID); // account.id
+    expect(out).toContain('America/New_York'); // account.timezone
+    expect(out).toContain(API_URL); // api.url — the per-install endpoint
+    expect(out).toContain(INSTALL_ID); // install_id
+    expect(out).toContain('1.0.3'); // display_version
   });
 
-  it('omits the [TEST] marker for a live (non-test) account', async () => {
-    const body = JSON.stringify({ account: { is_test: false } });
-    await POST(makeRequest(makeToken({ status: 'installed' }), body));
-    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-    expect(output).toContain('installed');
-    expect(output).not.toContain('[TEST]');
+  it('takes shared fields from the body (the body is the source of event data)', async () => {
+    // A verified token authenticates the delivery; the body carries the event.
+    const body = makeBody({ account: { id: 'BODY-ACCOUNT', name: 'Body Co', platform: 'peek' } });
+    await POST(makeRequest(makeToken({ account: { id: ACCOUNT_ID } }), body));
+    const out = logged();
+    expect(out).toContain('BODY-ACCOUNT'); // from the body
+    expect(out).toContain('Body Co');
   });
 
-  it('takes identity from the token, never the body (a forged body cannot override it)', async () => {
-    const forgedBody = JSON.stringify({
-      account: { id: 'ATTACKER', name: 'Evil', platform: 'peek', is_test: false },
-    });
-    await POST(makeRequest(makeToken({ account: { id: '1000001' } }), forgedBody));
-    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-    expect(output).toContain('1000001'); // authoritative account id, from the token
-    expect(output).not.toContain('ATTACKER');
+  it('falls back to the token for shared fields the body omits', async () => {
+    // Body omits install_id -> parseInstallWebhook uses the token `sub`.
+    const body = makeBody({ install_id: undefined });
+    await POST(makeRequest(makeToken({ sub: INSTALL_ID }), body));
+    expect(logged()).toContain(INSTALL_ID);
   });
 
   it('fails loud (500) on a status this package version does not recognize', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const res = await POST(makeRequest(makeToken({ status: 'suspended' })));
+    const res = await POST(makeRequest(makeToken(), makeBody({ status: 'suspended' })));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'unknown status: suspended' });
     errSpy.mockRestore();

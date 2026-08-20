@@ -55,7 +55,7 @@ describe('verifyPeekAuthToken', () => {
   it('returns the claims for a valid token', () => {
     const auth = verifyPeekAuthToken(makeToken());
     expect(auth.installId).toBe('install-abc-123');
-    expect(auth.user.email).toBe('user@example.com');
+    expect(auth.user?.email).toBe('user@example.com');
   });
 
   it('throws for a wrong-secret token', () => {
