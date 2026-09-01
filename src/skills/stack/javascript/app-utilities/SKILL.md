@@ -193,9 +193,11 @@ const svc = createAccessServiceForInstall(await installs.get(id), { jwtSecret, i
 > required**, so persist and pass `apiUrl` now.
 
 Beyond `accountId`/`installId`, still **mint your own `installDataId`** (an install-time marker) to
-scope an install's working data so a fresh reinstall wipes cleanly — see `webhooks` and
-`backoffice-data`. The full persistence model lives in `webhooks`; concrete usage in your platform's
-`*-webhooks` / `*-backoffice-api` skill.
+scope an install's working data so a fresh reinstall wipes cleanly — but **mint a new one only on a
+*genuine* (re)install**: guard on an operator-level active flag (keyed on `accountId`) so a
+duplicate/extra `installed` or an `update_installed` on an already-active operator keeps the existing
+`installDataId` instead of wiping live data. See `webhooks` and `backoffice-data`. The full persistence
+model lives in `webhooks`; concrete usage in your platform's `*-webhooks` / `*-backoffice-api` skill.
 
 ## Related skills
 

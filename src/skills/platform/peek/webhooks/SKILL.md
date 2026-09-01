@@ -164,8 +164,14 @@ cleanly; **persist `platform`** (selects the access service), **`timezone`** (th
 hardcoded URL.** **Every event is a full snapshot: upsert by `installId` and overwrite** — an
 `update_installed` can deliver a new `apiUrl`, and a stale one calls the wrong endpoint.
 `installId`/`accountId`/`accountName`/`platform`/`isTest` always arrive → non-nullable columns;
-`apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value. To build the client from a
-stored install, `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`
+`apiUrl`/`timezone` may be `""` on a delivery, so keep the last stored value. **Persist an
+operator-level active flag (keyed on `accountId`) and mint a new `installDataId` only on a genuine
+(re)install** — when the operator has no record (first install) or its current install is **not active**
+(was uninstalled). An `installed` while the operator is already active (a duplicate/extra delivery —
+defensive) or an `update_installed` (a field refresh) upserts the record but **keeps the existing
+`installDataId`**; on uninstall, flip the flag off and mark the old install's data for wipe. Key the
+check on `accountId`, since `installId` may change (see `peek-backoffice-api`). To build the client from
+a stored install, `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`
 wires the URL for you — see `peek-backoffice-api`.
 
 ## Related skills

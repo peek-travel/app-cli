@@ -109,11 +109,15 @@ body JSON, including `api.url`, `account.timezone`, `modified_by`) are in `webho
   discipline in `webhooks`). Install/uninstall can be redelivered; make handling repeat-safe.
 - **Every event is a full snapshot — upsert by `installId`.** Install-status is the natural place to
   hang lifecycle handling: on install/update, upsert the install/account record (capturing `accountId`,
-  `accountName`, `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh
-  `installDataId`; on uninstall, tear down / wipe the prior install's data. Key account-permanent data
-  on `accountId`; scope wipe-on-reinstall working data to the `installDataId` you mint (see
-  `cng-backoffice-api`). **Fail loud on an unknown `status`** — a 2xx is treated as delivered and not
-  redelivered, so a coerced unknown drops the transition.
+  `accountName`, `platform`, `timezone`, and **`apiUrl` — always the latest**); on uninstall, flip the
+  operator's active flag off and tear down / wipe the prior install's data. **Mint a fresh
+  `installDataId` only on a genuine (re)install** — guard on an **operator-level active flag** keyed on
+  `accountId`: mint (and wipe the old data) only when the operator has no record (first install) or its
+  current install is **not active** (was uninstalled); an `installed` while already active (a
+  duplicate/extra delivery — defensive) or an `update_installed` upserts but **keeps the existing
+  `installDataId`**. Key account-permanent data on `accountId`; scope wipe-on-reinstall working data to
+  the `installDataId` you mint (see `cng-backoffice-api`). **Fail loud on an unknown `status`** — a 2xx
+  is treated as delivered and not redelivered, so a coerced unknown drops the transition.
 - **To *act* on an event** (call cng in response), build an install-scoped client **from the stored
   `platform` + `apiUrl`** — `createAccessServiceForInstall({ platform, apiUrl, installId }, config)`,
   or `createCngServiceForInstall(installId, apiUrl)` (see the server-to-cng recipe in
