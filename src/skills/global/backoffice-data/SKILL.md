@@ -94,14 +94,21 @@ Platforms pass several identifiers (who is acting, which account, which install)
 When you add persistence:
 
 - On install (or lazily, on the first authenticated request for an install), get-or-create the
-  install record and stamp its `installDataId` (e.g. the install id plus a first-seen marker you
-  generate). Capture `accountId`, `accountName`, `platform`, `apiUrl`, and `timezone` from the
-  install webhook — it is their only source.
+  install record and, on a *genuine* (re)install, stamp a fresh `installDataId` (e.g. the install id
+  plus a first-seen marker you generate — see the mint-guard bullet below). Capture `accountId`,
+  `accountName`, `platform`, `apiUrl`, and `timezone` from the install webhook — it is their only source.
 - **Treat every install event as a full-snapshot upsert keyed by `installId`** — overwrite the stored
   `apiUrl` / name / version / platform with the incoming values, so a later `update_installed` can't
   leave you calling a **stale `apiUrl`** (the wrong endpoint).
 - **Scope wipe-on-reinstall records to `installDataId`; scope account-permanent records to
   `accountId`** — both keyed on **normalized** resource IDs.
+- **Mint a new `installDataId` only on a genuine (re)install — guard on an operator-level active flag.**
+  Persist an active flag keyed on `accountId`. On an install delivery, mint a fresh `installDataId` (and
+  drop the old install's data) **only if** the operator has no record (first install) or its current
+  install is **not active** (was uninstalled). If the operator is already active, an incoming `installed`
+  (a duplicate/extra delivery — defensive) or an `update_installed` (a field refresh) upserts the record
+  but **keeps the existing `installDataId`** — don't wipe live data. On uninstall, flip the flag inactive
+  and mark the old install's data for wipe. Key the check on `accountId`, since `installId` may change.
 - **The identity fields the install webhook delivers always arrive and are never null — model them as
   non-nullable columns.** The only `null` is a version-mismatch sentinel on `platform`/`status` you
   fail loud on, never a stored value.

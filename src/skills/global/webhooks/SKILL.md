@@ -186,7 +186,8 @@ your data on the right one:
   `installId` + an install-time stamp) and scope an install's own working data to it. Its value is a
   **clean wipe on a fresh (re)install**: on reinstall, mint a new `installDataId` and drop everything
   under the old one, so a reinstalled app starts fresh instead of inheriting stale state. (Contrast:
-  account-permanent data lives under `accountId` and is meant to *survive*.) See `backoffice-data`.
+  account-permanent data lives under `accountId` and is meant to *survive*.) **Only mint a new one on a
+  *genuine* (re)install — see "When to mint a new `installDataId`" below.** See `backoffice-data`.
 - **`platform` — persist it per install.** It decides **which platform APIs / SDK client / features**
   the install is served by (peek vs cng vs acme), two installs of the same app can be on **different**
   platforms, and this webhook is its **only source**. Store it alongside `installId` / `accountId`.
@@ -222,6 +223,27 @@ complete, current record**, and an `update_installed` event delivers the *same f
 and overwrite your stored fields with the incoming ones. A consumer that reads only the first
 `installed` event and ignores later `update_installed` deliveries keeps **stale data — most
 dangerously a stale `apiUrl`, sending its API calls to the wrong endpoint.**
+
+### When to mint a new `installDataId` — guard on the operator's active state
+
+Minting a fresh `installDataId` **wipes the old install's working data**, so mint one only on a
+*genuine* (re)install — **not** on every install delivery. Persist an **operator-level active flag**
+(keyed on the permanent `accountId`) on the account/install record, and on each install-status delivery
+branch on the operator's *current* stored state:
+
+- **No record for this operator (first install)** → create it, mint a fresh `installDataId`, mark active.
+- **Operator's current install is *not active* (was previously uninstalled)** → a real reinstall: mint a
+  **new** `installDataId`, drop everything under the old one, mark active.
+- **Operator's install is *already active*** → an incoming `installed` (a duplicate/extra delivery —
+  defensive; it shouldn't happen) or an `update_installed` (a field refresh) is **not** a reinstall.
+  Upsert the record (overwrite `apiUrl` / name / version / platform) but **keep the existing
+  `installDataId`** — do **not** wipe live data.
+- **On uninstall** → flip the flag inactive and tear down / mark the old install's data for wipe. The
+  *next* `installed` then falls into the "not active" branch and mints fresh.
+
+Key this check on **`accountId`** (the operator), never on `installId` — `installId` **may change**
+across reinstalls, so an installId-keyed check would miss the prior install's state. Keying on the
+operator is what makes minting both correct *and* idempotent against a redelivered `installed`.
 
 ## Stable keys
 

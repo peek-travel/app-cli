@@ -167,11 +167,18 @@ Phase 0 has no database, so there's nothing to scope yet. **When you add persist
   data instead lives under `accountId` and is meant to *survive*.)
 - **Hang install-lifecycle handling on the install webhook, as a full-snapshot upsert by `installId`.**
   On install/update, upsert the account/install record (capturing `accountId`, `accountName`,
-  `platform`, `timezone`, and **`apiUrl` — always the latest**) and stamp a fresh `installDataId`; on
-  uninstall, tear down / mark for wipe. Every event redelivers the full record, so **overwrite `apiUrl`
-  each time** — a later `update_installed` can move it. You can still lazily get-or-create on the first
-  authenticated request from `auth.installId` for the install handle, but `accountId`/`apiUrl` only
-  become available once the install webhook has fired.
+  `platform`, `timezone`, and **`apiUrl` — always the latest**); on uninstall, flip the operator's
+  active flag off and tear down / mark for wipe. Every event redelivers the full record, so **overwrite
+  `apiUrl` each time** — a later `update_installed` can move it. You can still lazily get-or-create on
+  the first authenticated request from `auth.installId` for the install handle, but `accountId`/`apiUrl`
+  only become available once the install webhook has fired.
+- **Mint a fresh `installDataId` only on a genuine (re)install — guard on an operator-level active flag**
+  (keyed on `accountId`, stored e.g. as `active` on the install/account record). Mint a new one (and drop
+  the old install's data) **only if** the operator has no record (first install) or its current install
+  is **not active** (was uninstalled). An `installed` arriving while the operator is already active (a
+  duplicate/extra delivery — defensive, shouldn't happen) or an `update_installed` (a field refresh)
+  upserts the record but **keeps the existing `installDataId`** — don't wipe live data. Since `installId`
+  may change on reinstall, key this check on `accountId`.
 
 **Build the client from `apiUrl`.** To act on an install, construct its `PeekAccessService` from the
 persisted **`apiUrl`** — pass it as the config's `apiUrl` (used *as given*), or hand the whole record

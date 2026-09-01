@@ -143,6 +143,12 @@ Phase 0 ships no database. **When you add persistence:**
 - **Treat each event as a full-snapshot upsert by `installId`** — capture `accountId`, `accountName`,
   `platform`, `timezone`, and **`apiUrl` (always the latest)**, overwriting the stored values, so a
   later `update_installed` can't leave you on a stale `apiUrl`.
+- **Mint a new `installDataId` only on a genuine (re)install — guard on an operator-level active flag**
+  (keyed on `accountId`): mint a fresh one (and wipe the old install's data) only when the operator has
+  no record (first install) or its current install is **not active** (was uninstalled). While the
+  operator is already active, an incoming `installed` (a duplicate/extra delivery — defensive) or an
+  `update_installed` upserts the record but **keeps the existing `installDataId`**. On uninstall, flip
+  the flag off and mark the old data for wipe. Key on `accountId`, since `installId` may change.
 - **Build the client from `apiUrl`.** Construct `CngAccessService` with the persisted `apiUrl`, or use
   **`createAccessServiceForInstall({ platform, apiUrl, installId }, config)`**. The config's
   `baseUrl`/`appId`/`mode` are **deprecated** (hardcoded gateway default) and will be removed —
