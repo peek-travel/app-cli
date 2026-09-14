@@ -105,7 +105,7 @@ uses the **same four vars as every platform** — and, unlike Peek, needs **no `
 | `PEEK_APP_SECRET` | Shared secret for verifying the peek-auth JWT | **Secret** — never commit. Must be the same app whose tokens you verify |
 | `PEEK_APP_ID` | The app's ID / issuer | Must pair with the matching `PEEK_APP_SECRET` — same app |
 | `PEEK_APP_URL` | The app's own public base URL | Builds the embed redirect target and dev origins |
-| `PEEK_API_URL` | Back-office API base | Defaults to the **prod** installations API (`https://app-registry.peeklabs.com/installations-api`). **Sandbox uses a different URL** — must match the environment the app is registered in |
+| `PEEK_API_URL` | Back-office API base | Defaults to the **prod** installations API (`https://apps.peek.com/installations-api`). **Sandbox uses a different URL** — must match the environment the app is registered in |
 
 > These four are not independent knobs — they must all describe the **same app in the same
 > environment** (prod *or* sandbox). A prod secret with a sandbox API, or a test-app id verifying

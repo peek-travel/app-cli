@@ -4,7 +4,7 @@ import { join } from "node:path";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
 
-export const DEFAULT_REGISTRY_URL = "https://app-registry.peeklabs.com";
+export const DEFAULT_REGISTRY_URL = "https://apps.peek.com";
 
 interface GlobalSettings {
   registryUrl?: string;

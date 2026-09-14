@@ -123,7 +123,7 @@ what it does:**
 ```json
 {
   "status": "installed",
-  "api": { "url": "https://app-registry.sandbox.peeklabs.com/installations-api/your-app-dev" },
+  "api": { "url": "https://apps.peek.com/installations-api/your-app-dev" },
   "account": {
     "id": "4b52e9d2-7411-4d47-9100-71bebb55d151",
     "name": "Oskar's Boat Tours",

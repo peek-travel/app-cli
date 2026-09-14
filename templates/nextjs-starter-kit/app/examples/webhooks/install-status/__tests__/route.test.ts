@@ -18,8 +18,7 @@ const { POST } = await import('../route');
 
 const INSTALL_ID = 'cf34832d-16ea-4197-86fd-bf63e6917348';
 const ACCOUNT_ID = '4b52e9d2-7411-4d47-9100-71bebb55d151';
-const API_URL =
-  'https://app-registry.sandbox.peeklabs.com/installations-api/google-things-to-do-integration-test-dev';
+const API_URL = 'https://apps.peek.com/installations-api/google-things-to-do-integration-test-dev';
 
 // The signed `app_registry_v2` token authenticates the whole delivery and backs
 // up the fields the body also carries (sub, account.id, status, version, user).

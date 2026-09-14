@@ -8,7 +8,7 @@ const schema = z.object({
     z
       .string()
       .url("PEEK_API_URL must be a full URL, e.g. https://your-app.example.com")
-      .default("https://app-registry.peeklabs.com/installations-api"),
+      .default("https://apps.peek.com/installations-api"),
   ),
   PEEK_APP_URL: z
     .string()
