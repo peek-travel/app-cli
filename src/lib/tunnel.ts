@@ -175,7 +175,7 @@ export interface NamedTunnelOptions {
   port: number;
   // Slugified app name (e.g. "acme-widgets"); the tunnel is "<appName>-dev".
   appName: string;
-  // Base domain the developer controls in Cloudflare (e.g. "peeklabs.com").
+  // Base domain the developer controls in Cloudflare (e.g. "devsite.com").
   domain: string;
 }
 

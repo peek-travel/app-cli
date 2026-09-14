@@ -33,12 +33,12 @@ describe('parseEnv', () => {
   it('defaults PEEK_API_URL when missing', () => {
     const withoutApiUrl = Object.fromEntries(Object.entries(VALID).filter(([k]) => k !== 'PEEK_API_URL'));
     const env = parseEnv(withoutApiUrl);
-    expect(env.PEEK_API_URL).toBe('https://app-registry.peeklabs.com/installations-api');
+    expect(env.PEEK_API_URL).toBe('https://apps.peek.com/installations-api');
   });
 
   it('defaults PEEK_API_URL when empty string', () => {
     const env = parseEnv({ ...VALID, PEEK_API_URL: '' });
-    expect(env.PEEK_API_URL).toBe('https://app-registry.peeklabs.com/installations-api');
+    expect(env.PEEK_API_URL).toBe('https://apps.peek.com/installations-api');
   });
 
   it('respects NODE_ENV when provided', () => {
