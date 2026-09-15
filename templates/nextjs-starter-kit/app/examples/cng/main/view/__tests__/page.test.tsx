@@ -199,6 +199,25 @@ describe("SettingsViewPage", () => {
     expect(setLoadingActivities).toHaveBeenCalledWith(false);
   });
 
+  it("surfaces the gateway's message verbatim when the fetch is forbidden", async () => {
+    const setError = vi.fn();
+    stateSequence = [
+      [true, vi.fn()],
+      [null, vi.fn()],
+      [null, vi.fn()],
+      [false, vi.fn()],
+      [null, setError],
+    ];
+    const message =
+      "CNG request forbidden: the app is missing the required permission: products:read";
+    mockApiFetch.mockRejectedValueOnce(new Error(message));
+
+    const button = findByType(SettingsViewPage(), "ody-button");
+    await (button?.props.onClick as () => Promise<void>)();
+
+    expect(setError).toHaveBeenCalledWith(message);
+  });
+
   it("shows an error alert when the activities fetch fails", () => {
     stateSequence = makeStates({ ready: true, error: "Request failed" });
     const rendered = JSON.stringify(SettingsViewPage());
