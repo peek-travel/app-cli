@@ -1,0 +1,25 @@
+{
+  "global": [
+    {
+      "slug": "app_registry_settings_url@v1",
+      "configuration": {
+        "url": "/examples/peek-pro/main",
+        "url_mode": "prepend_base_url"
+      }
+    },
+    {
+      "slug": "app_registry_webhook@v1",
+      "configuration": {
+        "url": "/examples/webhooks/install-status"
+      }
+    }
+  ],
+  "peek": [
+    {
+      "slug": "peek_backoffice_api@v1",
+      "configuration": {}
+    }
+  ],
+  "acme": null,
+  "cng": null
+}

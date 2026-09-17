@@ -31,7 +31,7 @@ model cng data.
 
 What cng apps in this starter kit **do** receive is the **install-status webhook** — a
 platform-agnostic lifecycle event (install / uninstall / etc.) that Peek's app registry POSTs. It's
-declared in `app.cng.json` as the `app_registry_webhook@v1` registry extendable pointing at
+declared in `app.json` as the `app_registry_webhook@v1` registry extendable pointing at
 `/examples/webhooks/install-status`, and implemented at
 `app/examples/webhooks/install-status/route.ts`. This same endpoint serves every platform — the
 `account.platform` field on the payload tells you which one fired it.
@@ -140,6 +140,6 @@ cng-relevant webhook, and you verify + parse it with `parseInstallWebhook`.
 - **`cng-backoffice-api`** — `installDataId` scoping and the cng client used inside a handler.
 - **`javascript-nextjs`** (stack) — the route-handler rules (JSON only, no `react-dom/server`).
 - **`cng-manifest-and-deploy`** — where the webhook endpoint URL (`app_registry_webhook@v1`) is
-  declared in `app.cng.json`.
+  declared in `app.json`.
 - **`peek-webhooks`** — Peek's richer webhook story (booking/waiver parsers); a contrast, since
   those parsers **do not** apply to cng.

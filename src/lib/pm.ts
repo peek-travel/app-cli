@@ -31,7 +31,7 @@ function invokingPm(): PackageManager | undefined {
     : undefined;
 }
 
-function isInstalled(pm: PackageManager): boolean {
+export function isInstalled(pm: PackageManager): boolean {
   try {
     return spawnSync(pm, ["--version"], { stdio: "ignore" }).status === 0;
   } catch {
@@ -39,6 +39,10 @@ function isInstalled(pm: PackageManager): boolean {
   }
 }
 
+// Every rule below only ever picks a package manager that is actually on PATH. The one
+// exception is an explicit `--pm` flag, which we honor as asked — the caller checks it with
+// assertInstalled() so a typo or a missing binary is a clear error, not an ENOENT from the
+// install spawn.
 export function detectPackageManager(
   override?: string,
   targetDir?: string,
@@ -50,16 +54,20 @@ export function detectPackageManager(
     return override as PackageManager;
   }
 
-  // 1. A lockfile in the project wins — it's the template author's / project's explicit choice.
+  // 1. A lockfile in the project — the template author's / project's explicit choice, but
+  //    only if that package manager exists here. The starter template ships a
+  //    pnpm-lock.yaml, so an unconditional rule here hands `pnpm install` to every
+  //    developer who has never installed pnpm.
   if (targetDir) {
     for (const [lockfile, pm] of Object.entries(LOCKFILES)) {
-      if (existsSync(join(targetDir, lockfile))) {
+      if (existsSync(join(targetDir, lockfile)) && isInstalled(pm)) {
         return pm;
       }
     }
   }
 
-  // 2. A deliberate non-npm invocation (`pnpm dlx`, `yarn dlx`, `bunx`) — honor it.
+  // 2. A deliberate non-npm invocation (`pnpm dlx`, `yarn dlx`, `bunx`) — honor it. It ran
+  //    us, so it's installed by definition.
   const invoking = invokingPm();
   if (invoking && invoking !== "npm") return invoking;
 
@@ -69,6 +77,29 @@ export function detectPackageManager(
 
   // 4. Fall back to however we were invoked, else npm.
   return invoking ?? "npm";
+}
+
+// The lockfiles in a freshly scaffolded project that belong to some OTHER package manager
+// than the one we're installing with. The template ships its author's lockfile (pnpm's);
+// when we fall back to npm because pnpm isn't installed, leaving it behind would send a
+// later `peek dev` back to pnpm and leave a lockfile that never matches node_modules.
+export function foreignLockfiles(pm: PackageManager, targetDir: string): string[] {
+  return Object.entries(LOCKFILES)
+    .filter(([, owner]) => owner !== pm)
+    .map(([lockfile]) => join(targetDir, lockfile))
+    .filter((path) => existsSync(path));
+}
+
+// Guard an explicitly requested package manager before we try to spawn it, so a missing
+// binary reads as "install it or pick another" rather than a raw ENOENT.
+export function assertInstalled(pm: PackageManager): void {
+  if (isInstalled(pm)) return;
+
+  throw new CLIError(
+    `${pm} is not installed (or not on your PATH).`,
+    `Install it (e.g. "npm install -g ${pm}") or let \`peek init\` pick one for you by ` +
+      `dropping the "--pm ${pm}" flag.`,
+  );
 }
 
 export function installArgs(pm: PackageManager): string[] {

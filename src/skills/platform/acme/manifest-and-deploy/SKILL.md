@@ -2,14 +2,16 @@
 name: acme-manifest-and-deploy
 description: >-
   The concrete ACME manifest, registration, and deploy — how to register, configure, and ship a
-  starter-kit app to an ACME account. Covers app.acme.json (the acme_backoffice_api@v1 platform
-  extendable, the app_registry_settings_url that is the embed URL ACME POSTs to, the install-status
-  webhook registration), the two-manifest/two-environment split and the #1 source of 401s, the
-  shared PEEK_APP_SECRET / PEEK_APP_ID / PEEK_APP_URL / PEEK_API_URL env contract (no gatewayKey/mode
-  for ACME), and the Vercel + Neon hosting default. Use when editing app.acme.json, setting up
-  env/secrets, registering the app, changing embed/webhook URLs, or deploying. Triggers on
-  "app.acme.json", "acme manifest", "acme_backoffice_api", "deploy acme app", "env vars", "register
-  the acme app", "sandbox vs prod", "401 after deploy".
+  starter-kit app to an ACME account. Covers the app.json manifest (extendables keyed by platform:
+  the acme_backoffice_api@v1 platform extendable, the app_registry_settings_url that is the embed
+  URL ACME POSTs to, the install-status webhook registration), what app.json does NOT hold (slug,
+  base_url, listing copy), the .peek-kit.json project file, the two-app/two-environment split and
+  the #1 source of 401s, the shared PEEK_APP_SECRET / PEEK_APP_ID / PEEK_APP_URL / PEEK_API_URL
+  env contract (no gatewayKey/mode for ACME), and the Vercel + Neon hosting default. Use when
+  editing app.json, setting up env/secrets, registering the app, changing embed/webhook URLs, or
+  deploying. Triggers on "app.json", "app.example.acme.json", "acme manifest", ".peek-kit.json",
+  "use-url", "acme_backoffice_api", "deploy acme app", "env vars", "register the acme app",
+  "sandbox vs prod", "401 after deploy".
 ---
 
 # ACME manifest, registration & deployment
@@ -21,7 +23,7 @@ per environment or every request 401s; hand the user a complete env checklist �
 ACME*.
 
 Getting an app from this starter kit into an ACME account has three parts: the **manifest**
-(`app.acme.json`), **registration** in the Development Hub, and **deployment** to your host.
+(`app.json`), **registration** in the Development Hub, and **deployment** to your host.
 
 > **Hosting is your choice — this skill recommends a default.** Language/framework/SDK are fixed by
 > the kit (`javascript-nextjs`); the **host and database are the "moving layer."** Recommended
@@ -31,19 +33,37 @@ Getting an app from this starter kit into an ACME account has three parts: the *
 > not a Supabase-signed JWT, so Supabase's RLS/auth differentiators go unused. See
 > `peek-manifest-and-deploy`.)
 
-## 1. The manifest — `app.acme.json`
+## 1. The manifest — `app.json`
 
-`app.acme.json` describes the app to ACME. Key fields (templated with `{{APP_SLUG}}` /
-`{{APP_NAME}}`):
+`app.json` declares **what the app plugs into**, and nothing else. It is a flat object of
+extendables keyed by who consumes them — `global` plus one key per platform. (The starter kit
+ships an example per platform, `app.example.acme.json`; `peek init` copies the one you picked to
+`app.json` and deletes the examples, so your app has exactly one manifest.)
 
-- **`app.id` / `app.name`** — the app slug and display name.
-- **`app_version`** — `status`, `display_version`, listing copy, `icon_url`, `base_url`, and
-  **`platforms: ["acme"]`**.
-- **`platform_extendables.acme`** — the platform capabilities the app requests. This kit ships
+```json
+{
+  "global": [
+    { "slug": "app_registry_settings_url@v1",
+      "configuration": { "url": "/examples/acme/main", "url_mode": "prepend_base_url" } },
+    { "slug": "app_registry_webhook@v1",
+      "configuration": { "url": "/examples/webhooks/install-status" } }
+  ],
+  "acme": [
+    { "slug": "acme_backoffice_api@v1",
+      "configuration": { "permissions": ["products:read"] } }
+  ],
+  "peek": null,
+  "cng": null
+}
+```
+
+- **`acme`** — the platform capabilities the app requests. This kit ships
   **`acme_backoffice_api@v1`** with `configuration.permissions: ["products:read"]` — that's what
   grants access to the ACME back-office API used via `AcmeAccessService` (see `acme-backoffice-api`).
-  Widen the `permissions` array only as far as the app actually needs.
-- **`registry_extendables`** — how ACME surfaces the app:
+  Widen the `permissions` array only as far as the app actually needs. The key holding a **list**
+  is what makes the app run on ACME: platform support is *derived* from these keys, `null` means
+  "not on that platform", and a key you **leave out** means "leave that platform as it is."
+- **`global`** — how ACME surfaces the app:
   - **`app_registry_settings_url@v1`** with `url: "/examples/acme/main"` and
     `url_mode: "prepend_base_url"` — ACME loads `<base_url>/examples/acme/main` (the embed entry
     route) inside the iframe. **This URL is what ACME POSTs to** — it must match the embed route
@@ -51,23 +71,33 @@ Getting an app from this starter kit into an ACME account has three parts: the *
   - **`app_registry_webhook@v1`** with `url: "/examples/webhooks/install-status"` — registers the
     install-status webhook endpoint (see `acme-webhooks`).
 
-> When you change the embed path or add/point a webhook or MCP endpoint, update `app.acme.json` to
-> match and re-register/re-publish in the Development Hub.
+**Three things are NOT in app.json, and putting them back breaks the push (unknown top-level keys
+are rejected with a 400):**
+
+| Not in the manifest | Where it lives |
+| --- | --- |
+| The app's **slug** | `.peek-kit.json` (`app.id`), and in the URL the CLI pushes to — which is what lets one manifest be pushed at your real app *and* at its test app. |
+| **`base_url`** | Set per environment: `peek dev` points the test app at the tunnel, `peek use-url <url>` points an app at a deployed host. |
+| **Name, description, icon, screenshots, categories** | A per-platform **listing**, written and reviewed in the portal (*Apps → your app → Distribution*). |
+
+> When you change the embed path or add/point a webhook or MCP endpoint, update `app.json` and push
+> it (`peek sync-app`); `peek dev` pushes it for you on every restart.
 
 > **Slug note:** the manifest requests the extendable as `acme_backoffice_api@v1`. Internally the
 > SDK routes REST calls through the gateway path segment `acme_backoffice_api-v1` — you don't set
 > that (the `AcmeAccessService` does); just don't be surprised the two forms differ.
 
-## The two-manifest / two-environment split — the #1 source of 401s
+## The two-app / two-environment split — the #1 source of 401s
 
-You are really juggling **two separate apps**, and mixing their identities is the most common cause
-of "every request 401s / blank iframe." The same discipline as Peek applies:
+You are really juggling **two separate apps** — one manifest, pushed at two slugs — and mixing
+their identities is the most common cause of "every request 401s / blank iframe." The same
+discipline as Peek applies:
 
 | | **Source / production app** | **Dev / test app** |
 | --- | --- | --- |
-| Manifest | `app.acme.json` (you author + publish) | a generated dev manifest at the tunnel URL |
-| App id | your real slug | a test slug |
-| `base_url` | your deployed URL | the ephemeral tunnel URL (rewritten each dev run) |
+| Slug | your real slug, `.peek-kit.json` `app.id` | the test slug the registry derives, `app.testId` |
+| Manifest | `app.json` — the **same file** is pushed at both | same `app.json` |
+| `base_url` | your deployed URL, set with `peek use-url <url> --prod` | the ephemeral tunnel URL, re-set on each `peek dev` run |
 | Installations API | **prod** (`PEEK_API_URL` default) | **sandbox** |
 | id + secret live in | the **host's** env, set at deploy | `.env.local` (written by the dev CLI) |
 
@@ -131,11 +161,15 @@ green (lint → typecheck → test w/ coverage → build). Any Node-capable host
 - [ ] Development Hub access; **prod** app registered → its `PEEK_APP_ID` + `PEEK_APP_SECRET` (the
       prod app's, not the dev/test app's).
 - [ ] Vercel project created and connected to the repo.
-- [ ] `PEEK_APP_URL` set to the deployed URL; **`app.acme.json`** `base_url` matches it.
+- [ ] `PEEK_APP_URL` set to the deployed URL, and the **prod app** pointed at the same origin:
+      `peek use-url https://<your-host> --prod` (that is what sets `base_url` — it is not a field
+      in `app.json`).
 - [ ] Host env is one **coherent prod set**: `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_APP_URL`, and
       `PEEK_API_URL` (prod default — don't carry over the sandbox URL); Neon `DATABASE_URL` if used.
-- [ ] Register the embed URL (`<base_url>/examples/acme/main`) and the install-status webhook (and
-      any MCP URL) in the Hub / `app.acme.json`; validate in **sandbox** first.
+- [ ] Declare the embed URL (`<base_url>/examples/acme/main`) and the install-status webhook (and any
+      MCP URL) in `app.json` and push it (`peek sync-app`); validate in **sandbox** first.
+- [ ] Write the **listing** (name, description, icon, screenshots) in the portal under
+      *Apps → your app → Distribution* — none of it comes from `app.json`.
 - [ ] Confirm the embed loads in the iframe (CSP `frame-ancestors` set in `next.config.ts`).
 
 ## Related skills

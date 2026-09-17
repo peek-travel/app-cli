@@ -1,12 +1,18 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
-import { basename, dirname, join } from "node:path";
 import { execa } from "execa";
 import * as p from "@clack/prompts";
 import { CLIError } from "../errors.js";
+import { type Manifest, manifestPlatforms } from "./manifest.js";
+import { openProject, packageSlug, readProject, updateProject } from "./project.js";
 import { getInstallationsApiUrl, getRegistryUrl, isRegistryOverridden } from "./registry.js";
 import { writeEnvLocal } from "./scaffold.js";
-import { createTestApp, syncApp } from "./sync.js";
+import {
+  type AppVersion,
+  createTestApp,
+  publishDraft,
+  setBaseUrl,
+  upsertManifest,
+} from "./sync.js";
 import { startNamedTunnel, startTunnel, warmTunnel } from "./tunnel.js";
 
 // Is a port bindable right now? Bind with no host so it covers every interface the dev
@@ -34,83 +40,34 @@ async function findAvailablePort(start: number, attempts = 20): Promise<number> 
   );
 }
 
-// The dev loop targets a TEST app (app-dev.json), never the source app.json. The source is
-// synced only as an unpublished draft; the test app is what gets a base_url, gets published,
-// and is what the developer installs. app-dev.json lives beside app.json in the project.
-export function devFileFor(appFile: string): string {
-  return join(dirname(appFile), "app-dev.json");
-}
-
-interface AppJson {
-  data?: {
-    app?: {
-      id?: string;
-      app_version?: { base_url?: string | null; app_urls?: Record<string, string> };
-    };
-  };
-}
-
-function readAppJson(appFile: string): AppJson {
-  try {
-    return JSON.parse(readFileSync(appFile, "utf8")) as AppJson;
-  } catch {
-    throw new CLIError(`${appFile} is not valid JSON`);
-  }
-}
-
-export function setBaseUrl(appFile: string, url: string): void {
-  const parsed = readAppJson(appFile);
-  const version = parsed.data?.app?.app_version;
-  if (!version) {
-    throw new CLIError(
-      "Could not find data.app.app_version in app.json to set base_url.",
-      "Make sure app.json has the expected structure.",
-    );
-  }
-  version.base_url = url;
-  writeFileSync(appFile, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-}
-
 export interface ServeOptions {
   cwd: string;
   appFile: string;
   pm: string;
   port: number;
-  // When true: register app.json as a draft, create/reuse a test app (app-dev.json), and
-  // publish that test app carrying the tunnel base_url. When false: just run the dev server.
+  // When true: register app.json as a draft on the source app, create/reuse a test app,
+  // push the same manifest at it, point it at the tunnel, and publish it. When false: just
+  // run the dev server.
   sync: boolean;
   // When set, use a PERSISTENT named tunnel at <app>-dev.<domain> (requires a Cloudflare login)
   // instead of an ephemeral quick tunnel. Keeps base_url stable across restarts.
   domain?: string;
-}
-
-// Derive the tunnel's app slug from package.json "name": lowercased, non-alphanumerics collapsed
-// to dashes. Matches the reference dev.tmp so a tunnel keeps the same name across tools.
-function appSlug(cwd: string): string {
-  let name: string | undefined;
-  try {
-    ({ name } = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as { name?: string });
-  } catch {
-    throw new CLIError(`Could not read package.json in ${cwd}`);
-  }
-  const slug = (name ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (!slug) {
-    throw new CLIError(
-      'package.json "name" is missing or empty — cannot derive a tunnel name.',
-      "Set a name in package.json, then retry.",
-    );
-  }
-  return slug;
+  // Overrides the app slug recorded in .peek-kit.json (`peek dev --app <slug>`).
+  appId?: string;
 }
 
 // The single source of truth for "run the app behind a public tunnel". Used by both
 // `peek dev` and the tail of `peek init` — the latter needs the tunnel up BEFORE its first
-// sync, because the registry rejects a publish whose base_url is null (relative extendable
-// URLs require it). Callers must have already ensured login + confirmed the registry.
+// publish, because the registry rejects a publish whose base_url is null (relative
+// extendable URLs require one). Callers must have already ensured login + confirmed the
+// registry.
 export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
+  // Read the project (migrating an old-format one) BEFORE the tunnel goes up, so a broken
+  // manifest fails fast instead of orphaning cloudflared.
+  const project = opts.sync
+    ? openProject(opts.cwd, opts.appFile, { appIdFlag: opts.appId })
+    : undefined;
+
   // Pin a free port before anything downstream (tunnel, PORT env, base_url) is derived from it.
   const port = await findAvailablePort(opts.port);
   if (port !== opts.port) {
@@ -120,81 +77,38 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
   const spinner = p.spinner();
   spinner.start(opts.domain ? "Starting persistent Cloudflare tunnel" : "Starting Cloudflare tunnel");
   const tunnel = opts.domain
-    ? await startNamedTunnel({ port, appName: appSlug(opts.cwd), domain: opts.domain })
+    ? await startNamedTunnel({ port, appName: tunnelName(opts.cwd), domain: opts.domain })
     : await startTunnel(port);
   spinner.stop(`Tunnel up: ${tunnel.url}`);
 
-  const devFile = devFileFor(opts.appFile);
-
   try {
-    if (opts.sync) {
-      // 1. Register the source app.json as an UNPUBLISHED DRAFT. No base_url needed — a draft
-      //    upsert doesn't publish, so the registry won't reject a null base_url. The source
-      //    app.json stays clean (never carries the ephemeral tunnel URL).
-      p.log.step("Registering your app (draft)");
-      const { appId } = await syncApp({
-        file: opts.appFile,
-        autoPublish: false,
-        pull: false,
-        debug: false,
-        assumeYes: true,
+    let published: AppVersion | undefined;
+    let appId: string | undefined;
+
+    if (project) {
+      const result = await publishTestApp({
+        cwd: opts.cwd,
+        appId: project.appId,
+        testAppId: project.testAppId,
+        manifest: project.manifest,
+        baseUrl: tunnel.url,
       });
-
-      // 2. Create the test app for this source and export it to app-dev.json. Only on first
-      //    run — once app-dev.json exists we reuse that test app across dev restarts.
-      if (!existsSync(devFile)) {
-        p.log.step("Creating a test app for local development");
-        const created = await createTestApp(appId, devFile);
-        p.log.step("Wrote app-dev.json");
-
-        // The registry mints the test app's secret once, at creation — this is the only
-        // response that carries it. Persist it now; the publish step below never returns it.
-        if (created.sharedSecret) {
-          await writeEnvLocal(opts.cwd, { PEEK_APP_SECRET: created.sharedSecret });
-          p.log.step(
-            "Saved the test app secret to .env.local as PEEK_APP_SECRET.\nFor production deploys, set that env var yourself.",
-          );
-        }
-      }
+      published = result.version;
+      appId = result.testAppId;
+    } else {
+      // --no-sync still runs against whatever test app this project last used, so the app
+      // boots with the right identity even though we touch nothing in the registry.
+      appId = readProject(opts.cwd).app?.testId;
     }
 
-    // Everything from here targets the TEST app (app-dev.json): base_url, publish, secret,
-    // install links. Falls back to app.json only for a --no-sync run before any test app exists.
-    const workFile = existsSync(devFile) ? devFile : opts.appFile;
-
-    // The tunnel URL is ephemeral (new one each restart), so refresh env + the work file every run.
+    // The tunnel URL is ephemeral (a new one each restart), so refresh env every run.
     const env: Record<string, string> = { PEEK_APP_URL: tunnel.url };
-    const appId = readAppJson(workFile).data?.app?.id;
     if (appId) env.PEEK_APP_ID = appId;
     // Only when the registry is overridden: point the running app's installation API calls at
     // that same override. In prod (no override) the app uses its own default, so leave it unset.
     if (isRegistryOverridden()) env.PEEK_API_URL = getInstallationsApiUrl();
     await writeEnvLocal(opts.cwd, env);
     p.log.step("Updated PEEK_APP_URL in .env.local");
-
-    setBaseUrl(workFile, tunnel.url);
-    p.log.step(`Updated base_url in ${basename(workFile)}`);
-
-    if (opts.sync) {
-      // 3. Publish the TEST app against the live tunnel URL.
-      p.log.step("Publishing your test app");
-      const result = await syncApp({
-        file: workFile,
-        autoPublish: true,
-        pull: false,
-        debug: false,
-        assumeYes: true,
-      });
-      // The shared secret is minted once and never returned again — persist it now. Because
-      // we save it for them, syncApp (assumeYes) skips its scary "save this now" warning;
-      // this concise note replaces it without the mixed message.
-      if (result.sharedSecret) {
-        await writeEnvLocal(opts.cwd, { PEEK_APP_SECRET: result.sharedSecret });
-        p.log.step(
-          "Saved a new app secret to .env.local as PEEK_APP_SECRET.\nFor production deploys, set that env var yourself.",
-        );
-      }
-    }
 
     // Tunnel URL is plumbing — demote it to a step so the install link can be the last,
     // loudest thing before we hand off to the (noisy) dev server banner.
@@ -208,37 +122,10 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
     // both edge and origin are warm before anyone navigates.
     warmTunnel(tunnel.url, port);
 
-    // The registry writes install URLs back into app-dev.json under data.app.app_version.app_urls
-    // during sync. Print them LAST — the final Peek output before the app boots — so this
+    // Print the install links LAST — the final Peek output before the app boots — so this
     // call to action isn't buried under the dev server's own output.
-    const appUrls = readAppJson(workFile).data?.app?.app_version?.app_urls;
-    if (appUrls && Object.keys(appUrls).length > 0) {
-      // Keep the MCP url on the SAME registry base the developer is using — default or an
-      // override — so an override'd session doesn't paste a prod MCP endpoint into their config.
-      const mcpUrl = `${getRegistryUrl().replace(/\/+$/, "")}/mcp`;
+    if (published) printNextSteps(published);
 
-      const lines = [
-        "▸ Open your app",
-        "",
-        ...Object.entries(appUrls).map(([label, url]) => `  ${label}  ${url}`),
-        "",
-        "  Open a link above to install the app — it loads live from this dev server.",
-        "",
-        "▸ Build it with AI",
-        "",
-        "  This project ships with Claude skills ready to go. Open it in your AI",
-        "  assistant and just describe what you want — it knows how to build here.",
-        "",
-        "  Wire up the Peek app MCP so your assistant can talk to the registry —",
-        "  add this to your MCP config:",
-        "",
-        '    "peek-app-mcp": {',
-        `      "url": "${mcpUrl}",`,
-        '      "oauth": { "client_id": "peek-mcp" }',
-        "    }",
-      ];
-      p.note(lines.join("\n"), "Next steps");
-    }
     await execa(opts.pm, ["run", "dev"], {
       cwd: opts.cwd,
       stdio: "inherit",
@@ -247,4 +134,126 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
   } finally {
     tunnel.stop();
   }
+}
+
+interface PublishOptions {
+  cwd: string;
+  appId: string;
+  testAppId?: string;
+  manifest: Manifest;
+  baseUrl: string;
+}
+
+// The dev loop's registry half. Four writes, in this order, because each depends on the
+// last:
+//
+//   1. push the manifest at the SOURCE app as a draft — this is what creates the app the
+//      first time. It's left unpublished: no base_url, and a draft doesn't need one.
+//   2. ask for its test app (idempotent — the same `<app>-dev` every run).
+//   3. push the SAME manifest at the test app, so manifest edits take effect on restart.
+//   4. point the test app at the tunnel, then publish it. base_url and the manifest write
+//      the same draft, so publishing is its own step that picks that draft up — which also
+//      means it happens exactly once, after both writes are in.
+//
+// Everything the developer installs and runs is the TEST app. The source app.json is never
+// given the ephemeral tunnel URL, and is never published from here.
+async function publishTestApp(
+  opts: PublishOptions,
+): Promise<{ testAppId: string; version: AppVersion }> {
+  p.log.step("Registering your app (draft)");
+  const source = await upsertManifest({
+    appId: opts.appId,
+    manifest: opts.manifest,
+    autoPublish: false,
+  });
+  if (source.action === "created") {
+    p.log.step(`Created ${opts.appId} in the registry`);
+  }
+
+  const test = await createTestApp(opts.appId, { baseUrl: opts.baseUrl });
+  if (test.created) {
+    p.log.step(`Created a test app for local development: ${test.testAppId}`);
+  }
+  // Remember the test app even when it already existed — an app cloned from a repo has the
+  // source slug but has never seen its own test app.
+  if (test.testAppId !== opts.testAppId) {
+    updateProject(opts.cwd, { app: { testId: test.testAppId } });
+  }
+
+  // The registry mints the test app's secret once, at creation — that response is the only
+  // one that carries it. Persist it now; nothing below will ever return it again.
+  if (test.sharedSecret) {
+    await writeEnvLocal(opts.cwd, { PEEK_APP_SECRET: test.sharedSecret });
+    p.log.step(
+      "Saved the test app secret to .env.local as PEEK_APP_SECRET.\nFor production deploys, set that env var yourself.",
+    );
+  }
+
+  await upsertManifest({
+    appId: test.testAppId,
+    manifest: opts.manifest,
+    autoPublish: false,
+  });
+
+  // A test app is born published at the URL we just asked for, so only move an existing
+  // one — otherwise the first run would cut a second version that says the same thing.
+  if (!test.created) {
+    await setBaseUrl(test.testAppId, opts.baseUrl);
+  }
+  p.log.step(`Pointed ${test.testAppId} at ${opts.baseUrl}`);
+
+  p.log.step("Publishing your test app");
+  const version = await publishDraft(test.testAppId);
+
+  const platforms = manifestPlatforms(opts.manifest);
+  if (platforms.length === 0) {
+    p.log.warn(
+      "This manifest targets no platform — every platform key is null, so there's nothing to install.",
+    );
+  }
+
+  return { testAppId: test.testAppId, version };
+}
+
+function printNextSteps(version: AppVersion): void {
+  if (Object.keys(version.appUrls).length === 0) return;
+
+  // Keep the MCP url on the SAME registry base the developer is using — default or an
+  // override — so an override'd session doesn't paste a prod MCP endpoint into their config.
+  const mcpUrl = `${getRegistryUrl().replace(/\/+$/, "")}/mcp`;
+
+  const lines = [
+    "▸ Open your app",
+    "",
+    ...Object.entries(version.appUrls).map(([label, url]) => `  ${label}  ${url}`),
+    "",
+    "  Open a link above to install the app — it loads live from this dev server.",
+    "",
+    "▸ Build it with AI",
+    "",
+    "  This project ships with Claude skills ready to go. Open it in your AI",
+    "  assistant and just describe what you want — it knows how to build here.",
+    "",
+    "  Wire up the Peek app MCP so your assistant can talk to the registry —",
+    "  add this to your MCP config:",
+    "",
+    '    "peek-app-mcp": {',
+    `      "url": "${mcpUrl}",`,
+    '      "oauth": { "client_id": "peek-mcp" }',
+    "    }",
+  ];
+  p.note(lines.join("\n"), "Next steps");
+}
+
+// Derive the named tunnel's hostname from package.json "name". Matches the reference
+// dev.tmp so a tunnel keeps the same name across tools.
+function tunnelName(cwd: string): string {
+  const slug = packageSlug(cwd);
+  if (!slug) {
+    throw new CLIError(
+      'package.json "name" is missing or empty — cannot derive a tunnel name.',
+      "Set a name in package.json, then retry.",
+    );
+  }
+  return slug;
 }

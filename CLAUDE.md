@@ -6,8 +6,29 @@
   registers the global `--skip-env-confirm` flag.
 - **Registry/session state:** `src/lib/registry.ts` (which registry, override, confirm gate),
   `src/lib/session.ts` (per-registry tokens).
+- **Registry client:** `src/lib/sync.ts` — every publisher-API call (upsert, base-url, export,
+  test-apps, versions, publish) plus `peek sync-app`'s push/pull.
 - **Scaffolding:** `src/lib/scaffold.ts` — `composeSkills()` copies `src/skills/{global, platform/<p>,
   stack/<s>}` into a scaffolded app's `.claude/skills/`.
+
+## An app's two files
+
+The publisher API takes the app's slug in the URL and the bare **manifest** as the body, so a
+project's facts are split:
+
+- `app.json` — `src/lib/manifest.ts`. The manifest and only the manifest: `{ global: [...],
+  peek: [...] | null, acme: …, cng: … }`. Unknown top-level keys are a 400, so nothing else may be
+  smuggled in. `loadManifest()` also reads two older shapes and converts them: the pre-flattening
+  `{data: {app: …}}` envelope, and a flat manifest whose non-platform key is still named
+  `registry` (the registry renamed it to `global`).
+- `.peek-kit.json` — `src/lib/project.ts`. Which app this directory publishes to (`app.id`), the
+  test app the dev loop uses (`app.testId`), and what scaffolded it. `openProject()` is the
+  migrating loader every registry-touching command goes through: it flattens a legacy `app.json`,
+  moves the slug out of it, and retires `app-dev.json`.
+
+`base_url` belongs to neither — it is per environment, set by `peek dev` (tunnel) and
+`peek use-url` (a deployed host). Listing copy belongs to neither either: it is per platform and
+written in the portal.
 
 ## App-building skills (`src/skills/`) — the authoring source of truth
 
@@ -19,8 +40,9 @@ scaffolded app. `global/app-builder` is the orchestrator; the rest are its sibli
 > **Keep the `cli` skill in sync with the CLI.** `src/skills/global/cli/SKILL.md` documents the
 > CLI's commands, flags, and the extensions workflow for app-building agents. **Whenever you change
 > a command, a flag (e.g. `--skip-env-confirm`), the `show-env` / `auth` / `dev` / `sync-app` /
-> `extensions` behavior, or the set of registry extensions apps can declare, update that skill in
-> the same change** — and check its cross-links (`app-builder`, `manifest-and-deploy`, `webhooks`,
+> `use-url` / `extensions` behavior, the shape of `app.json` / `.peek-kit.json`, or the set of
+> registry extensions apps can declare, update that skill in the same change** — and check its
+> cross-links (`app-builder`, `manifest-and-deploy` incl. the three platform ones, `webhooks`,
 > `backoffice-data`) still hold. A stale `cli` skill silently teaches agents the wrong CLI.
 
 ## Build & test

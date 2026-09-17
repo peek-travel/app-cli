@@ -1,21 +1,9 @@
-import { cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { CLIError } from "../errors.js";
-
-// The CLI's own version, read from the package it ships in. Same resolution trick as the
-// USER_AGENT reads in lib/extensions.ts and lib/sync.ts: ../../package.json lands on the
-// package root from both src/lib (tsx dev) and dist/lib (compiled).
-const { version: CLI_VERSION } = createRequire(import.meta.url)("../../package.json") as {
-  version: string;
-};
-
-// Dotfile written into every scaffolded app recording which starter kit created it and the
-// CLI version that ran. Lets later tooling (and humans) tell what an app was born from.
-export const KIT_METADATA_FILE = ".peek-kit.json";
 
 // The default starter kit is vendored into the CLI package under templates/ (see the
 // package.json "files" list) so `peek init` works offline and always ships a known-good
@@ -30,6 +18,11 @@ export const DEFAULT_TEMPLATE = fileURLToPath(
 // trick as the template: from both src/lib (tsx dev) and dist/lib (compiled), ../../src/skills
 // lands on the package root's src/skills — which ships via the package.json "files" list.
 export const SKILLS_ROOT = fileURLToPath(new URL("../../src/skills", import.meta.url));
+
+// The kit's per-platform example manifests: one is promoted to the app's app.json, all are
+// then removed (see selectPlatformManifest).
+const EXAMPLE_MANIFEST = (platform: string): string => `app.example.${platform}.json`;
+const EXAMPLE_MANIFEST_RE = /^app\.example\..+\.json$/;
 
 // Files checked for {{APP_NAME}} / {{APP_SLUG}} placeholders. Kept as a small explicit
 // list — no templating engine, just string replace.
@@ -72,45 +65,34 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
   }
 }
 
-// Record what this app was scaffolded from: the starter kit name and the CLI version that
-// created it (plus the selected platform, for context). Derives the kit name from the
-// template source path so it stays correct if more kits are ever vendored.
-export async function writeKitMetadata(
-  targetDir: string,
-  source: string,
-  platform: string,
-  stack: string,
-): Promise<void> {
-  const metadata = {
-    starterKit: basename(source),
-    cliVersion: CLI_VERSION,
-    platform,
-    stack,
-    createdAt: new Date().toISOString(),
-  };
-  await writeFile(
-    join(targetDir, KIT_METADATA_FILE),
-    `${JSON.stringify(metadata, null, 2)}\n`,
-    "utf8",
-  );
-}
-
-// The starter kit ships one manifest per platform (app.peek.json, app.acme.json,
-// app.cng.json) and no plain app.json. Pick the selected platform's manifest and copy it
-// into app.json, which the rest of the flow (var substitution, sync, serve) expects.
+// The starter kit ships one EXAMPLE manifest per platform (app.example.peek.json,
+// app.example.acme.json, app.example.cng.json) and no plain app.json. Copy the selected
+// platform's example to app.json — which the rest of the flow (var substitution, sync,
+// serve) expects — and then delete every example.
+//
+// They go because a scaffolded app has exactly one manifest, and leaving the others behind
+// invites the two failure modes we'd never see reported: editing the example instead of the
+// real file, and pushing a manifest for a platform the app isn't built for. The kit keeps
+// them; the app doesn't need them.
 export async function selectPlatformManifest(
   targetDir: string,
   platform: string,
 ): Promise<void> {
-  const src = join(targetDir, `app.${platform}.json`);
+  const src = join(targetDir, EXAMPLE_MANIFEST(platform));
   const dest = join(targetDir, "app.json");
   if (!existsSync(src)) {
     throw new CLIError(
-      `Template has no app.${platform}.json`,
-      "The starter kit must ship a manifest for the selected platform.",
+      `Template has no ${EXAMPLE_MANIFEST(platform)}`,
+      "The starter kit must ship an example manifest for the selected platform.",
     );
   }
   await cp(src, dest);
+
+  for (const entry of readdirSync(targetDir)) {
+    if (EXAMPLE_MANIFEST_RE.test(entry)) {
+      await rm(join(targetDir, entry));
+    }
+  }
 }
 
 // Pull the `name:` out of a SKILL.md's YAML frontmatter (e.g. `name: peek-embed-and-auth`).

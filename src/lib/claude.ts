@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -130,53 +130,39 @@ export async function generateAppDetails(
   }
 }
 
-// Write the generated description + listing markdown into app.json, preserving the rest of the
-// file: .data.app.app_version.description.en and .listing_md.en. Returns false if the file is
-// missing / unparseable / lacks the expected shape (e.g. a minimal template).
-export async function writeAppCopy(
-  appFile: string,
+// Write the generated copy to LISTING.md in the new app.
+//
+// This deliberately does NOT go into app.json. A manifest describes the BUILD — which
+// extendables it uses and which platforms it runs on — and carries no name, description,
+// icon or store copy. That is listing content, it is per platform (the same build can read
+// differently on PeekPRO and on ACME), and it is written and reviewed in the portal under
+// Apps → your app → Distribution. So the draft lands in a file the developer pastes from.
+export async function writeListingDraft(
+  targetDir: string,
+  appName: string,
   details: Pick<AppDetails, "description" | "listingMd">,
 ): Promise<boolean> {
-  if (!existsSync(appFile)) return false;
+  const description = details.description.trim();
+  const listingMd = details.listingMd.trim();
+  if (!description && !listingMd) return false;
 
-  let json: {
-    data?: {
-      app?: {
-        app_version?: {
-          description?: { en?: string };
-          listing_md?: { en?: string };
-        };
-      };
-    };
-  };
-  try {
-    json = JSON.parse(await readFile(appFile, "utf8"));
-  } catch {
-    return false;
-  }
+  const body = [
+    `# ${appName} — listing draft`,
+    "",
+    "Store copy for this app, drafted at scaffold time. It lives here rather than in",
+    "`app.json`: a listing is per platform and is written and reviewed in the portal",
+    "(Apps → your app → Distribution). Paste it in there when you're ready to publish.",
+    "",
+    "## Short description",
+    "",
+    description,
+    "",
+    "## Listing",
+    "",
+    listingMd,
+    "",
+  ].join("\n");
 
-  const version = json.data?.app?.app_version;
-  if (!version || typeof version !== "object") return false;
-
-  let wrote = false;
-  if (
-    details.description.trim() &&
-    version.description &&
-    typeof version.description === "object"
-  ) {
-    version.description.en = details.description;
-    wrote = true;
-  }
-  if (
-    details.listingMd.trim() &&
-    version.listing_md &&
-    typeof version.listing_md === "object"
-  ) {
-    version.listing_md.en = details.listingMd;
-    wrote = true;
-  }
-  if (!wrote) return false;
-
-  await writeFile(appFile, `${JSON.stringify(json, null, 2)}\n`, "utf8");
+  await writeFile(join(targetDir, "LISTING.md"), body, "utf8");
   return true;
 }

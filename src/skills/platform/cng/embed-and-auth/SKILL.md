@@ -222,7 +222,7 @@ the reason only**. Never log the raw token or the decoded claims (user PII). See
   `installDataId` scoping and the REST-only capability ceiling.
 - **`cng-webhooks`** — the *other* inbound path (cng → your endpoint); you verify the delivery
   yourself (and it tolerates a `user: null` system event).
-- **`cng-manifest-and-deploy`** — where the POST embed URL is declared (`app.cng.json`) and how
+- **`cng-manifest-and-deploy`** — where the POST embed URL is declared (`app.json`) and how
   `PEEK_APP_SECRET` / `PEEK_APP_URL` are provisioned.
 - **`peek-embed-and-auth`** — the same pipeline on Peek (which adds `gatewayKey`/`mode`); contrast
   to see what cng drops.

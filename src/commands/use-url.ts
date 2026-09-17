@@ -1,27 +1,30 @@
-import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
-import { Args, Flags } from "@oclif/core";
+import { Flags, Args } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
+import { readProject } from "../lib/project.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
-import { devFileFor, setBaseUrl } from "../lib/serve.js";
-import { writeEnvLocal } from "../lib/scaffold.js";
-import { syncApp } from "../lib/sync.js";
+import { publishDraft, setBaseUrl } from "../lib/sync.js";
 import { failure } from "../lib/ui.js";
 
 export default class UseUrl extends BaseCommand {
   static description =
-    "Point your app at a permanent base URL (e.g. a deployed host) and publish it to the registry";
+    "Point an app at a permanent base URL (e.g. a deployed host) and publish it";
 
   static args = {
     url: Args.string({ description: "The base URL the app is served from, e.g. https://myapp.fly.dev", required: true }),
   };
 
   static flags = {
-    // Defaults to app-dev.json (the test app). Pass --app to target app.json or any other manifest.
-    app: Flags.string({ description: "Path to the app.json to update (defaults to ./app-dev.json)" }),
+    // Defaults to this project's test app — the same app `peek dev` publishes — because
+    // that's the one whose base_url normally moves (tunnel → a real host). --prod targets
+    // the source app, and --app targets any slug.
+    prod: Flags.boolean({
+      description: "Target the source (production) app instead of the test app",
+      default: false,
+    }),
+    app: Flags.string({ description: "App slug to point at the URL" }),
     yes: Flags.boolean({ char: "y", description: "Skip the confirmation prompt", default: false }),
     debug: Flags.boolean({ description: "Print request URLs and raw responses", default: false }),
   };
@@ -33,43 +36,46 @@ export default class UseUrl extends BaseCommand {
     p.intro("peek use-url");
 
     const url = normalizeUrl(args.url);
-
-    // Default target is the test app (app-dev.json). --app lets you point at app.json or another manifest.
-    const target = flags.app ? resolve(cwd, flags.app) : devFileFor(join(cwd, "app.json"));
-    if (!existsSync(target)) {
-      throw flags.app
-        ? new CLIError(`${flags.app} does not exist.`)
-        : new CLIError(
-            "No app-dev.json in the current directory.",
-            "Run `peek dev` first to create your test app, or pass --app <path> to target a different app.json.",
-          );
-    }
+    const appId = this.targetApp(cwd, flags);
 
     await confirmRegistryOverride();
     await ensureLoggedIn();
 
-    // Mutate the file only after auth is settled, so an aborted login doesn't leave a half-changed manifest.
-    setBaseUrl(target, url);
-    p.log.step(`Set base_url to ${url} in ${basename(target)}`);
-
     try {
-      const result = await syncApp({
-        file: target,
-        autoPublish: true,
-        pull: false,
-        debug: flags.debug,
-        assumeYes: flags.yes,
-      });
-      // A publish can mint a fresh secret, returned only once — persist it, mirroring `peek dev`.
-      if (result.sharedSecret) {
-        await writeEnvLocal(cwd, { PEEK_APP_SECRET: result.sharedSecret });
-        p.log.step("Saved a new app secret to .env.local as PEEK_APP_SECRET.");
+      // Publishing makes the new origin live for everyone who has the app installed, so
+      // say what's about to happen and get a yes — loudly for a production app.
+      if (!flags.yes) {
+        p.log.info(
+          [
+            "Ready to publish:",
+            `  App: ${appId}`,
+            `  Base URL: ${url}`,
+          ].join("\n"),
+        );
+        const message = flags.prod
+          ? "This publishes a new PRODUCTION version. Continue?"
+          : "Continue?";
+        const answer = await p.confirm({ message, initialValue: false });
+        if (p.isCancel(answer) || !answer) {
+          p.outro("Aborted.");
+          return;
+        }
+      }
+
+      // base_url isn't in the manifest — it's its own endpoint, written onto the draft
+      // (cloning the published version first if needed). Publishing is the separate step
+      // that makes it live.
+      await setBaseUrl(appId, url, flags.debug);
+      p.log.step(`Set base_url to ${url}`);
+
+      const version = await publishDraft(appId, flags.debug);
+      p.log.success(`Published ${version.displayVersion}`);
+
+      const links = Object.entries(version.appUrls);
+      if (links.length > 0) {
+        p.note(links.map(([label, link]) => `  ${label}  ${link}`).join("\n"), "Install links");
       }
     } catch (error) {
-      if (error instanceof CLIError && error.message === "Aborted.") {
-        p.outro("Aborted.");
-        return;
-      }
       if (error instanceof CLIError) {
         failure(error.message, error.suggestion);
         this.exit(1);
@@ -77,7 +83,31 @@ export default class UseUrl extends BaseCommand {
       throw error;
     }
 
-    p.outro(`Done — your app now points at ${url}`);
+    p.outro(`Done — ${appId} now answers at ${url}`);
+  }
+
+  private targetApp(cwd: string, flags: { app?: string; prod: boolean }): string {
+    if (flags.app) return flags.app;
+
+    const project = readProject(cwd).app ?? {};
+
+    if (flags.prod) {
+      if (!project.id) {
+        throw new CLIError(
+          "No app recorded for this directory.",
+          "Run this from inside a Peek app directory, or pass --app <slug>.",
+        );
+      }
+      return project.id;
+    }
+
+    if (!project.testId) {
+      throw new CLIError(
+        "This project has no test app yet.",
+        "Run `peek dev` once to create one, pass --app <slug>, or use --prod to target the source app.",
+      );
+    }
+    return project.testId;
   }
 }
 
