@@ -419,11 +419,12 @@ function announceSecret(secret: string): void {
 async function push(options: SyncOptions): Promise<SyncResult> {
   const { manifest, converted } = loadManifest(options.file);
 
-  // A legacy envelope is converted in memory; write the flat form back so the file the
-  // developer keeps matches what we pushed and what a pull would return.
+  // An out-of-date manifest (legacy envelope, or the old "registry" key) is converted in
+  // memory; write the current form back so the file the developer keeps matches what we
+  // pushed and what a pull would return.
   if (converted) {
     writeManifest(options.file, manifest);
-    p.log.step(`Converted ${options.file} to the flat manifest format`);
+    p.log.step(`Migrated ${options.file} to the current manifest format`);
   }
 
   p.log.info(

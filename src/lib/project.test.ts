@@ -123,7 +123,7 @@ describe("openProject, on a project built against the old API", () => {
 
     // The manifest keeps only what a manifest holds...
     expect(opened.manifest).toEqual({
-      registry: [{ slug: "app_registry_webhook@v1", configuration: { url: "/hook" } }],
+      global: [{ slug: "app_registry_webhook@v1", configuration: { url: "/hook" } }],
       peek: [{ slug: "peek_backoffice_api@v1", configuration: {} }],
       acme: null,
       cng: null,

@@ -1,5 +1,5 @@
 {
-  "registry": [
+  "global": [
     {
       "slug": "app_registry_settings_url@v1",
       "configuration": {

@@ -205,7 +205,7 @@ export function openProject(
   if (converted) {
     writeManifest(appFile, manifest);
     step(
-      `Converted ${basename(appFile)} to the flat manifest format (extendables keyed by platform).`,
+      `Migrated ${basename(appFile)} to the current manifest format (extendables keyed by "global" and by platform).`,
     );
     if (legacyBaseUrl) {
       step(

@@ -3,11 +3,11 @@ import { CLIError } from "../errors.js";
 import { PLATFORM_VALUES } from "./platforms.js";
 
 // An app.json is the MANIFEST and nothing else: a flat object of extendables keyed by who
-// consumes them — "registry" plus one key per platform. No envelope, no app slug, no
+// consumes them — "global" plus one key per platform. No envelope, no app slug, no
 // base_url, no listing copy.
 //
 //   {
-//     "registry": [{ "slug": "app_registry_settings_url@v1", "configuration": { ... } }],
+//     "global":   [{ "slug": "app_registry_settings_url@v1", "configuration": { ... } }],
 //     "peek":     [{ "slug": "peek_backoffice_api@v1", "configuration": {} }],
 //     "acme": null,
 //     "cng":  null
@@ -20,7 +20,11 @@ import { PLATFORM_VALUES } from "./platforms.js";
 // keep in sync. Unknown top-level keys are a 400, so we never add our own bookkeeping here
 // (the app's slug lives in the project file — see lib/project.ts).
 
-export const REGISTRY_KEY = "registry";
+// The extendables every platform sees, whoever consumes the app. The registry called this
+// key "registry" before; a file still using that name is migrated on read (see
+// fromLegacyGlobalKey) — the extendable slugs themselves (app_registry_*) never changed.
+export const GLOBAL_KEY = "global";
+export const LEGACY_GLOBAL_KEY = "registry";
 
 export interface ExtendableEntry {
   slug: string;
@@ -32,7 +36,7 @@ export type Manifest = Record<string, ExtendableEntry[] | null>;
 // The keys a manifest may carry. Anything else is rejected by the registry with a 400
 // rather than ignored, so we validate locally and name the offender before the round trip.
 export function manifestKeys(): string[] {
-  return [REGISTRY_KEY, ...PLATFORM_VALUES];
+  return [GLOBAL_KEY, ...PLATFORM_VALUES];
 }
 
 // ---------------------------------------------------------------------------------------
@@ -103,7 +107,7 @@ function fromLegacy(json: LegacyManifest): LoadedManifest {
   const supported = new Set(version.platforms ?? []);
   const platformExtendables = version.platform_extendables ?? {};
 
-  const manifest: Manifest = { [REGISTRY_KEY]: entries(version.registry_extendables) };
+  const manifest: Manifest = { [GLOBAL_KEY]: entries(version.registry_extendables) };
   for (const platform of PLATFORM_VALUES) {
     manifest[platform] = supported.has(platform)
       ? entries(platformExtendables[platform])
@@ -116,6 +120,33 @@ function fromLegacy(json: LegacyManifest): LoadedManifest {
     legacyBaseUrl: version.base_url ?? undefined,
     converted: true,
   };
+}
+
+// The flat manifest's first key was called "registry" until the registry renamed it to
+// "global" (same meaning: the extendables that aren't scoped to one platform). Pushing the
+// old name is now a 400, so rename it on read — in place, so it keeps its leading position
+// — and report it as a conversion, which makes the caller write the migrated file back.
+function fromLegacyGlobalKey(json: unknown, file: string): { json: unknown; converted: boolean } {
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    return { json, converted: false };
+  }
+
+  const source = json as Record<string, unknown>;
+  if (!Object.hasOwn(source, LEGACY_GLOBAL_KEY)) return { json, converted: false };
+
+  if (Object.hasOwn(source, GLOBAL_KEY)) {
+    throw new CLIError(
+      `${file} has both "${GLOBAL_KEY}" and the old "${LEGACY_GLOBAL_KEY}" key.`,
+      `"${LEGACY_GLOBAL_KEY}" was renamed to "${GLOBAL_KEY}" — merge the two lists under "${GLOBAL_KEY}" and delete "${LEGACY_GLOBAL_KEY}".`,
+    );
+  }
+
+  const renamed: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    renamed[key === LEGACY_GLOBAL_KEY ? GLOBAL_KEY : key] = value;
+  }
+
+  return { json: renamed, converted: true };
 }
 
 // Validate a decoded flat manifest, naming the exact key at fault. Same rules the registry
@@ -136,8 +167,8 @@ function validate(json: unknown, file: string): Manifest {
 
   for (const [key, value] of Object.entries(json as Manifest)) {
     if (value === null) {
-      if (key === REGISTRY_KEY) {
-        throw new CLIError(`${file}: "registry" must be a list of extendables, not null.`);
+      if (key === GLOBAL_KEY) {
+        throw new CLIError(`${file}: "${GLOBAL_KEY}" must be a list of extendables, not null.`);
       }
       continue;
     }
@@ -157,11 +188,12 @@ function validate(json: unknown, file: string): Manifest {
 }
 
 function manifestHint(): string {
-  return 'A manifest looks like { "registry": [ … ], "peek": [ … ], "acme": null, "cng": null }.';
+  return 'A manifest looks like { "global": [ … ], "peek": [ … ], "acme": null, "cng": null }.';
 }
 
-// Read an app.json in either shape. A legacy envelope is converted in memory and reported
-// via `converted` so the caller can write the flat form back and say so.
+// Read an app.json in any shape we've shipped. A legacy envelope, or a flat manifest still
+// keyed on "registry", is converted in memory and reported via `converted` so the caller
+// can write the current form back and say so.
 export function loadManifest(file: string): LoadedManifest {
   if (!existsSync(file)) {
     throw new CLIError(`${file} not found`);
@@ -178,7 +210,9 @@ export function loadManifest(file: string): LoadedManifest {
 
   if (isLegacyEnvelope(json)) return fromLegacy(json);
 
-  return { manifest: validate(json, file), converted: false };
+  const renamed = fromLegacyGlobalKey(json, file);
+
+  return { manifest: validate(renamed.json, file), converted: renamed.converted };
 }
 
 export function writeManifest(file: string, manifest: Manifest): void {

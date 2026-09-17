@@ -16,10 +16,11 @@
 The publisher API takes the app's slug in the URL and the bare **manifest** as the body, so a
 project's facts are split:
 
-- `app.json` — `src/lib/manifest.ts`. The manifest and only the manifest: `{ registry: [...],
+- `app.json` — `src/lib/manifest.ts`. The manifest and only the manifest: `{ global: [...],
   peek: [...] | null, acme: …, cng: … }`. Unknown top-level keys are a 400, so nothing else may be
-  smuggled in. `loadManifest()` also reads the pre-flattening `{data: {app: …}}` envelope and
-  converts it.
+  smuggled in. `loadManifest()` also reads two older shapes and converts them: the pre-flattening
+  `{data: {app: …}}` envelope, and a flat manifest whose non-platform key is still named
+  `registry` (the registry renamed it to `global`).
 - `.peek-kit.json` — `src/lib/project.ts`. Which app this directory publishes to (`app.id`), the
   test app the dev loop uses (`app.testId`), and what scaffolded it. `openProject()` is the
   migrating loader every registry-touching command goes through: it flattens a legacy `app.json`,

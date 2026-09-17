@@ -50,8 +50,8 @@ describe("peek init", () => {
     // app.json is the manifest and only the manifest: extendables keyed by who consumes
     // them, no app slug and no listing copy.
     const manifest = JSON.parse(await readFile(join(targetDir, "app.json"), "utf8"));
-    expect(Object.keys(manifest).sort()).toEqual(["acme", "cng", "peek", "registry"]);
-    expect(manifest.registry.map((e: { slug: string }) => e.slug)).toContain(
+    expect(Object.keys(manifest).sort()).toEqual(["acme", "cng", "global", "peek"]);
+    expect(manifest.global.map((e: { slug: string }) => e.slug)).toContain(
       "app_registry_settings_url@v1",
     );
     // The selected platform is the one with a list; the rest are explicitly null.

@@ -102,12 +102,12 @@ you build. Present the proposed list to the user and get sign-off before impleme
 ## Declaring the endpoint in `app.json`
 
 **Declare the MCP endpoint in the manifest** so cng/the orchestrator can find it. The registry
-extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry` entry in `app.json` with a **single parameter, `mcp_url`** (the route cng calls — e.g. `/examples/cng/mcp`),
+extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `global` entry in `app.json` with a **single parameter, `mcp_url`** (the route cng calls — e.g. `/examples/cng/mcp`),
 alongside the existing `app_registry_settings_url@v1`:
 
 ```jsonc
-// app.json → the "registry" list, alongside the settings URL already there
-"registry": [
+// app.json → the "global" list, alongside the settings URL already there
+"global": [
   { "slug": "app_registry_settings_url@v1",
     "configuration": { "url": "/examples/cng/main", "url_mode": "prepend_base_url" } },
   { "slug": "app_registry_mcp_url@v1",

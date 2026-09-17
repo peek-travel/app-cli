@@ -32,7 +32,7 @@ Run `peek <command> --help` for flags (`--port`, `--platform`, `--no-sync`, ...)
 
 | File | What it is |
 | --- | --- |
-| `app.json` | The **manifest**: the extensions your app plugs into, keyed by who consumes them — `registry` plus one key per platform. A platform key holding a list means the app runs there; `null` means it doesn't. That's all it holds. |
+| `app.json` | The **manifest**: the extensions your app plugs into, keyed by who consumes them — `global` plus one key per platform. A platform key holding a list means the app runs there; `null` means it doesn't. That's all it holds. |
 | `.peek-kit.json` | The **project file**: which app in the registry this directory publishes to (`app.id`), the test app the dev loop uses (`app.testId`), and what scaffolded it. Committed — the slug is identity, not a secret. |
 
 Three things are deliberately *not* in the manifest:

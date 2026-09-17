@@ -85,7 +85,7 @@ npm run test:coverage
   of them: a scaffolded app has exactly one manifest. (You are reading the kit,
   so they're still here.)
 - `app.json` — the app manifest: the extendables the app plugs into, keyed by
-  who consumes them (`registry` plus one key per platform). The app's slug lives
+  who consumes them (`global` plus one key per platform). The app's slug lives
   in `.peek-kit.json`, its `base_url` is set per environment by `peek dev` /
   `peek use-url`, and its store copy is a listing written in the portal.
 - `.peek-kit.json` — which app in the registry this project publishes to, the

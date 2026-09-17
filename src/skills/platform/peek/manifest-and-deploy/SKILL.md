@@ -47,11 +47,11 @@ Getting an app from this starter kit into a Peek Pro account has three parts: th
 ## 1. The manifest — `app.json`
 
 `app.json` declares **what the app plugs into**, and nothing else. It is a flat object of
-extendables keyed by who consumes them — `registry` plus one key per platform:
+extendables keyed by who consumes them — `global` plus one key per platform:
 
 ```json
 {
-  "registry": [
+  "global": [
     { "slug": "app_registry_settings_url@v1",
       "configuration": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" } },
     { "slug": "app_registry_webhook@v1",
@@ -68,7 +68,7 @@ extendables keyed by who consumes them — `registry` plus one key per platform:
   `PeekAccessService` (see `peek-backoffice-api`). The key holding a **list** is what makes the app
   run on Peek: platform support is *derived* from these keys, `null` means "not on that platform",
   and a key you **leave out** means "leave that platform as it is."
-- **`registry`** — how Peek surfaces the app. This kit ships
+- **`global`** — how Peek surfaces the app. This kit ships
   **`app_registry_settings_url@v1`** with `url: "/examples/peek-pro/main"` and
   `url_mode: "prepend_base_url"` — i.e. Peek loads `<base_url>/examples/peek-pro/main` (the embed
   entry route) inside the iframe. **This URL is what Peek POSTs to** — it must match the embed

@@ -124,12 +124,12 @@ belongs to; without it, the test app `dev` created.
 
 **Extensions (a.k.a. extendables) are the contract between the registry and your app.** An app
 **declares** the extensions it uses in its **manifest** — `app.json` — which is a flat object of
-extensions keyed by who consumes them: `registry` for the ones that aren't platform-specific, plus
+extensions keyed by who consumes them: `global` for the ones that aren't platform-specific, plus
 one key per platform:
 
 ```json
 {
-  "registry": [
+  "global": [
     { "slug": "app_registry_settings_url@v1",
       "configuration": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" } },
     { "slug": "app_registry_webhook@v1",

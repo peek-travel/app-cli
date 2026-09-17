@@ -35,13 +35,13 @@ Getting an app from this starter kit into a cng account has three parts: the **m
 ## 1. The manifest — `app.json`
 
 `app.json` declares **what the app plugs into**, and nothing else. It is a flat object of
-extendables keyed by who consumes them — `registry` plus one key per platform. (The starter kit
+extendables keyed by who consumes them — `global` plus one key per platform. (The starter kit
 ships an example per platform, `app.example.cng.json`; `peek init` copies the one you picked to
 `app.json` and deletes the examples, so your app has exactly one manifest.)
 
 ```json
 {
-  "registry": [
+  "global": [
     { "slug": "app_registry_settings_url@v1",
       "configuration": { "url": "/examples/cng/main", "url_mode": "prepend_base_url" } },
     { "slug": "app_registry_webhook@v1",
@@ -62,7 +62,7 @@ ships an example per platform, `app.example.cng.json`; `peek init` copies the on
   Widen the `permissions` array only as far as the app actually needs. The key holding a **list**
   is what makes the app run on cng: platform support is *derived* from these keys, `null` means
   "not on that platform", and a key you **leave out** means "leave that platform as it is."
-- **`registry`** — how cng surfaces the app:
+- **`global`** — how cng surfaces the app:
   - **`app_registry_settings_url@v1`** with `url: "/examples/cng/main"` and
     `url_mode: "prepend_base_url"` — cng loads `<base_url>/examples/cng/main` (the embed entry
     route) inside the iframe. **This URL is what cng POSTs to** — it must match the embed route
