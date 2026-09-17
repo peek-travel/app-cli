@@ -180,7 +180,7 @@ export interface NamedTunnelOptions {
 }
 
 // Start a PERSISTENT named tunnel at https://<appName>-dev.<domain>. Unlike startTunnel's
-// ephemeral quick tunnel, the hostname is stable across restarts, so app-dev.json's base_url
+// ephemeral quick tunnel, the hostname is stable across restarts, so the test app's base_url
 // stays valid and installs don't break on every `peek dev`. Requires a Cloudflare account with
 // the domain's zone. Sets up auth, tunnel, ingress config, and DNS, then runs the tunnel.
 export async function startNamedTunnel(opts: NamedTunnelOptions): Promise<Tunnel> {

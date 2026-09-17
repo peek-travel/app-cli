@@ -11,11 +11,14 @@ import { serveWithTunnel } from "../lib/serve.js";
 
 export default class Dev extends BaseCommand {
   static description =
-    "Run the app behind a public Cloudflare tunnel, syncing the tunnel URL to the registry";
+    "Run the app behind a public Cloudflare tunnel, publishing your test app at that URL";
 
   static flags = {
     port: Flags.integer({ description: "Local port the dev server listens on", default: 3000 }),
-    "no-sync": Flags.boolean({ description: "Skip pushing the tunnel URL to the registry", default: false }),
+    "no-sync": Flags.boolean({ description: "Skip pushing anything to the registry", default: false }),
+    app: Flags.string({
+      description: "App slug to develop against (defaults to the one in .peek-kit.json)",
+    }),
     domain: Flags.string({
       description:
         "Use a persistent named tunnel at <app>-dev.<domain> instead of an ephemeral quick tunnel. Requires a Cloudflare login and access to the domain's zone.",
@@ -51,6 +54,7 @@ export default class Dev extends BaseCommand {
       port: flags.port,
       sync: !flags["no-sync"],
       domain: flags.domain,
+      appId: flags.app,
     });
   }
 }

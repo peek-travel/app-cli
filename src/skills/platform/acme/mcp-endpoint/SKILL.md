@@ -3,7 +3,7 @@ name: acme-mcp-endpoint
 description: >-
   The concrete ACME MCP endpoint — how a starter-kit app exposes its functionality as MCP tools for
   the App Store AI orchestrator, on ACME. Use when adding or changing the app's ACME MCP endpoint,
-  wiring its auth, or declaring it in app.acme.json. Covers reusing withAppAuthentication (the same
+  wiring its auth, or declaring it in app.json. Covers reusing withAppAuthentication (the same
   brand-agnostic peek-auth token as the UI), the tools/list + tools/call route shape, sharing
   service-layer logic with the UI, the Node-runtime requirement, and the fact that ACME's small
   typed SDK surface is the hard ceiling on what you can expose. Triggers on "acme MCP", "MCP
@@ -99,19 +99,20 @@ direct-API escape hatch — see `acme-backoffice-api`). Right now that's essenti
 capability, mirroring the UI actions you build. Present the proposed list to the user and get
 sign-off before implementing.
 
-## Declaring the endpoint in `app.acme.json`
+## Declaring the endpoint in `app.json`
 
 **Declare the MCP endpoint in the manifest** so ACME/the orchestrator can find it. The registry
-extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry_extendables`
-entry with a **single parameter, `mcp_url`** (the route ACME calls — e.g. `/examples/acme/mcp`),
+extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry` entry in `app.json` with a **single parameter, `mcp_url`** (the route ACME calls — e.g. `/examples/acme/mcp`),
 alongside the existing `app_registry_settings_url@v1`:
 
 ```jsonc
-// app.acme.json → registry_extendables
-{
-  "app_registry_settings_url@v1": { "url": "/examples/acme/main", "url_mode": "prepend_base_url" },
-  "app_registry_mcp_url@v1":      { "mcp_url": "/examples/acme/mcp" }
-}
+// app.json → the "registry" list, alongside the settings URL already there
+"registry": [
+  { "slug": "app_registry_settings_url@v1",
+    "configuration": { "url": "/examples/acme/main", "url_mode": "prepend_base_url" } },
+  { "slug": "app_registry_mcp_url@v1",
+    "configuration": { "mcp_url": "/examples/acme/mcp" } }
+]
 ```
 
 Confirm the current parameters (and whether `mcp_url` prepends `base_url` like the settings URL
@@ -153,4 +154,4 @@ verified token's install).
 - **`acme-backoffice-api`** — what `AcmeAccessService` can do inside a tool handler, the typed-SDK
   capability ceiling, and PII rules for tool I/O.
 - **`javascript-nextjs`** (stack) — the route-handler/runtime flags for a server-to-server endpoint.
-- **`acme-manifest-and-deploy`** — declaring the MCP endpoint URL in `app.acme.json` / the registry.
+- **`acme-manifest-and-deploy`** — declaring the MCP endpoint URL in `app.json` / the registry.

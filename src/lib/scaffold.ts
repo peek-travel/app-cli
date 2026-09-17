@@ -1,21 +1,9 @@
 import { cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { CLIError } from "../errors.js";
-
-// The CLI's own version, read from the package it ships in. Same resolution trick as the
-// USER_AGENT reads in lib/extensions.ts and lib/sync.ts: ../../package.json lands on the
-// package root from both src/lib (tsx dev) and dist/lib (compiled).
-const { version: CLI_VERSION } = createRequire(import.meta.url)("../../package.json") as {
-  version: string;
-};
-
-// Dotfile written into every scaffolded app recording which starter kit created it and the
-// CLI version that ran. Lets later tooling (and humans) tell what an app was born from.
-export const KIT_METADATA_FILE = ".peek-kit.json";
 
 // The default starter kit is vendored into the CLI package under templates/ (see the
 // package.json "files" list) so `peek init` works offline and always ships a known-good
@@ -70,29 +58,6 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
   if (existsSync(shipped)) {
     await rename(shipped, join(targetDir, ".gitignore"));
   }
-}
-
-// Record what this app was scaffolded from: the starter kit name and the CLI version that
-// created it (plus the selected platform, for context). Derives the kit name from the
-// template source path so it stays correct if more kits are ever vendored.
-export async function writeKitMetadata(
-  targetDir: string,
-  source: string,
-  platform: string,
-  stack: string,
-): Promise<void> {
-  const metadata = {
-    starterKit: basename(source),
-    cliVersion: CLI_VERSION,
-    platform,
-    stack,
-    createdAt: new Date().toISOString(),
-  };
-  await writeFile(
-    join(targetDir, KIT_METADATA_FILE),
-    `${JSON.stringify(metadata, null, 2)}\n`,
-    "utf8",
-  );
 }
 
 // The starter kit ships one manifest per platform (app.peek.json, app.acme.json,

@@ -125,16 +125,18 @@ Normalize IDs on input (`B-123ABC` → `b_123abc`) and state units/formats in th
 ## Declaring the endpoint in `app.json`
 
 **Declare the MCP endpoint in `app.json`** so Peek/the orchestrator can find it. The registry
-extendable is **`app_registry_mcp_url@v1`**, a `registry_extendables` entry with a **single
+extendable is **`app_registry_mcp_url@v1`**, a `registry` entry with a **single
 parameter, `mcp_url`** (the route Peek calls — e.g. `/examples/peek-pro/mcp`), alongside the
 existing `app_registry_settings_url@v1`:
 
 ```jsonc
-// app.json → registry_extendables
-{
-  "app_registry_settings_url@v1": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" },
-  "app_registry_mcp_url@v1":      { "mcp_url": "/examples/peek-pro/mcp" }
-}
+// app.json → the "registry" list, alongside the settings URL already there
+"registry": [
+  { "slug": "app_registry_settings_url@v1",
+    "configuration": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" } },
+  { "slug": "app_registry_mcp_url@v1",
+    "configuration": { "mcp_url": "/examples/peek-pro/mcp" } }
+]
 ```
 
 Confirm the current parameters (and whether `mcp_url` prepends `base_url` like the settings URL

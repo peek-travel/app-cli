@@ -3,7 +3,7 @@ name: cng-mcp-endpoint
 description: >-
   The concrete Connect&GO (cng) MCP endpoint — how a starter-kit app exposes its functionality as
   MCP tools for the App Store AI orchestrator, on cng. Use when adding or changing the app's cng
-  MCP endpoint, wiring its auth, or declaring it in app.cng.json. Covers reusing
+  MCP endpoint, wiring its auth, or declaring it in app.json. Covers reusing
   withAppAuthentication (the same brand-agnostic peek-auth token as the UI), the tools/list +
   tools/call route shape, sharing service-layer logic with the UI, the Node-runtime requirement,
   and the fact that cng's small REST-only SDK surface is the hard ceiling on what you can expose.
@@ -99,19 +99,20 @@ so you can only expose what it actually offers. Right now that's essentially `li
 the safe default). As the cng SDK grows, add one tool per new capability, mirroring the UI actions
 you build. Present the proposed list to the user and get sign-off before implementing.
 
-## Declaring the endpoint in `app.cng.json`
+## Declaring the endpoint in `app.json`
 
 **Declare the MCP endpoint in the manifest** so cng/the orchestrator can find it. The registry
-extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry_extendables`
-entry with a **single parameter, `mcp_url`** (the route cng calls — e.g. `/examples/cng/mcp`),
+extendable is **`app_registry_mcp_url@v1`** (the same slug across platforms), a `registry` entry in `app.json` with a **single parameter, `mcp_url`** (the route cng calls — e.g. `/examples/cng/mcp`),
 alongside the existing `app_registry_settings_url@v1`:
 
 ```jsonc
-// app.cng.json → registry_extendables
-{
-  "app_registry_settings_url@v1": { "url": "/examples/cng/main", "url_mode": "prepend_base_url" },
-  "app_registry_mcp_url@v1":      { "mcp_url": "/examples/cng/mcp" }
-}
+// app.json → the "registry" list, alongside the settings URL already there
+"registry": [
+  { "slug": "app_registry_settings_url@v1",
+    "configuration": { "url": "/examples/cng/main", "url_mode": "prepend_base_url" } },
+  { "slug": "app_registry_mcp_url@v1",
+    "configuration": { "mcp_url": "/examples/cng/mcp" } }
+]
 ```
 
 Confirm the current parameters (and whether `mcp_url` prepends `base_url` like the settings URL
@@ -153,4 +154,4 @@ verified token's install).
 - **`cng-backoffice-api`** — what `CngAccessService` can do inside a tool handler, the REST-only
   capability ceiling, and PII rules for tool I/O.
 - **`javascript-nextjs`** (stack) — the route-handler/runtime flags for a server-to-server endpoint.
-- **`cng-manifest-and-deploy`** — declaring the MCP endpoint URL in `app.cng.json` / the registry.
+- **`cng-manifest-and-deploy`** — declaring the MCP endpoint URL in `app.json` / the registry.

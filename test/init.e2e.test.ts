@@ -47,9 +47,21 @@ describe("peek init", () => {
     expect(readme).toContain(appName);
     expect(readme).not.toContain("{{APP_NAME}}");
 
-    const app = JSON.parse(await readFile(join(targetDir, "app.json"), "utf8"));
-    expect(app.data.app.id).toBe(appName);
-    expect(app.data.app.name.en).toBe(appName);
+    // app.json is the manifest and only the manifest: extendables keyed by who consumes
+    // them, no app slug and no listing copy.
+    const manifest = JSON.parse(await readFile(join(targetDir, "app.json"), "utf8"));
+    expect(Object.keys(manifest).sort()).toEqual(["acme", "cng", "peek", "registry"]);
+    expect(manifest.registry.map((e: { slug: string }) => e.slug)).toContain(
+      "app_registry_settings_url@v1",
+    );
+    // The selected platform is the one with a list; the rest are explicitly null.
+    expect(manifest.peek).toHaveLength(1);
+    expect(manifest.acme).toBeNull();
+    expect(manifest.cng).toBeNull();
+
+    // The slug the registry knows the app by lives in the project file instead.
+    const kit = JSON.parse(await readFile(join(targetDir, ".peek-kit.json"), "utf8"));
+    expect(kit.app.id).toBe(appName);
 
     const nodeModules = await stat(join(targetDir, "node_modules"));
     expect(nodeModules.isDirectory()).toBe(true);
@@ -80,13 +92,9 @@ describe("peek init", () => {
     const slugDir = await stat(join(workdir, "my-cool-app"));
     expect(slugDir.isDirectory()).toBe(true);
 
-    // APP_NAME keeps the original label; APP_SLUG is the sanitized id.
-    const app = JSON.parse(await readFile(join(workdir, "my-cool-app", "app.json"), "utf8"));
-    expect(app.data.app.id).toBe("my-cool-app");
-    expect(app.data.app.name.en).toBe("My Cool App!");
-
-    // .peek-kit.json records the starter kit + the CLI version that scaffolded it.
+    // .peek-kit.json records the app's slug, the starter kit, and the CLI version.
     const kit = JSON.parse(await readFile(join(workdir, "my-cool-app", ".peek-kit.json"), "utf8"));
+    expect(kit.app.id).toBe("my-cool-app");
     expect(kit.starterKit).toBe("nextjs-starter-kit");
     expect(kit.platform).toBe("peek");
     expect(kit.stack).toBe("javascript");

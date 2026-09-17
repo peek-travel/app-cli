@@ -26,7 +26,7 @@ the peek-auth API pipeline — here *you* verify the delivery came from Peek; th
 token (contrast `peek-embed-and-auth`).
 
 > **What's scaffolded vs. not.** The kit **does** ship one webhook endpoint — the **install-status**
-> handler at `app/examples/webhooks/install-status/route.ts` (declared in `app.peek.json`), which
+> handler at `app/examples/webhooks/install-status/route.ts` (declared in `app.json`), which
 > verifies + logs install/uninstall deliveries. The **booking and waiver** endpoints are **not**
 > scaffolded — this skill is how you add them, as Next.js Route Handlers under
 > `app/examples/peek-pro/` (JSON/string responses only, no `react-dom/server` — see
@@ -126,7 +126,7 @@ Fires when a **waiver agreement signature is created** (`agreement_signature_cre
 
 Separate from booking/waiver, Peek's app registry fires an **install lifecycle webhook** on
 install / uninstall / update. **This kit scaffolds it** — `app/examples/webhooks/install-status/route.ts`
-(declared in `app.peek.json`), today verifying + logging the delivery. It is the **only** place the
+(declared in `app.json`), today verifying + logging the delivery. It is the **only** place the
 app learns **who an install belongs to** (the account behind it); no back-office read and no
 peek-auth token returns the account id, so what you persist here is all you get. The generic model,
 the wire format, and the identity-persistence rules live in `webhooks` — read them; don't re-derive

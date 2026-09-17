@@ -179,7 +179,7 @@ painful.
   (`withAppAuthentication` → `createCngService`), and the server-to-cng path with no user token.
 - **`cng-webhooks`** — the inbound path (the install-status webhook); reuse the same
   `installDataId` scoping to *act* on events.
-- **`cng-manifest-and-deploy`** — the `cng_backoffice_api@v1` extendable in `app.cng.json` grants
+- **`cng-manifest-and-deploy`** — the `cng_backoffice_api@v1` extendable in `app.json` grants
   this API access.
 - **`peek-backoffice-api`** — the canonical, larger example of a platform capability surface. cng
   mirrors its *discipline*, not its *capabilities* (no escape hatch, far smaller surface).

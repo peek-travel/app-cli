@@ -11,7 +11,8 @@ description: >-
   the manifest, or debugging "which registry / am I logged in / why is it prompting me." Triggers on
   "peek CLI", "app-cli", "peek dev", "sync-app", "extensions list", "extensions show", "show-env",
   "auth whoami", "auth login", "which registry", "production vs sandbox", "skip-env-confirm",
-  "what extensions are available", "app_registry_settings_url", "app_registry_webhook", "webhook_on",
+  "what extensions are available", "app.json", "manifest shape", ".peek-kit.json", "use-url",
+  "app_registry_settings_url", "app_registry_webhook", "webhook_on",
   "app_registry_mcp_url", "extensions list no output", "exit 255", "headless", "not signed in".
 ---
 
@@ -67,7 +68,7 @@ npx @peektravel/app-cli@latest set-env --clear
 > stops to ask *"Continue against this registry?"* — which stalls any non-interactive/agent run.
 > Append **`--skip-env-confirm`** to auto-confirm for that invocation:
 > ```bash
-> npx @peektravel/app-cli@latest sync-app app.peek.json --skip-env-confirm
+> npx @peektravel/app-cli@latest sync-app --skip-env-confirm
 > ```
 > It's a per-invocation flag — add it to **every** command you run while an override is active.
 
@@ -99,26 +100,66 @@ npx @peektravel/app-cli dev
 ```
 
 `dev` does three things at once: runs the app locally, opens a **public Cloudflare tunnel** to it,
-and **registers that tunnel URL with the app registry** — so the local build can be installed and
+and **publishes your test app at that tunnel URL** — so the local build can be installed and
 tested inside the platform's **App Store** with real auth. This is the only way to exercise the
 embedded app for real; a plain framework dev server can't (no host frame, no token — see
 `app-builder` "Running the app"). **You can't run this yourself** — it needs the user's credentials
-— so hand off to the user when it's time to see the app run. What `dev` does to the manifest (it
-creates a separate test app / `app-dev.json` and writes `.env.local`) is a `manifest-and-deploy`
-concern.
+— so hand off to the user when it's time to see the app run. What `dev` does with your app's
+identity (it creates a separate **test app**, records it in `.peek-kit.json`, and writes
+`.env.local`) is a `manifest-and-deploy` concern.
+
+## 2b. Point an app at a real host — `use-url`
+
+```bash
+npx @peektravel/app-cli use-url https://myapp.vercel.app          # the test app
+npx @peektravel/app-cli use-url https://myapp.vercel.app --prod   # the real app
+```
+
+A tunnel URL dies with the `dev` session. `use-url` sets an app's **`base_url`** to a permanent
+origin and publishes it — this is the deploy-time counterpart to `dev`, and the only way the
+origin is ever set (it is not a manifest field). `--prod` targets the app your `app.json`
+belongs to; without it, the test app `dev` created.
 
 ## 3. Extensions — how the registry talks to the app
 
 **Extensions (a.k.a. extendables) are the contract between the registry and your app.** An app
-**declares** the extensions it uses in its **manifest** — `app.<platform>.json` (e.g.
-`app.peek.json`), one manifest per platform. Running:
+**declares** the extensions it uses in its **manifest** — `app.json` — which is a flat object of
+extensions keyed by who consumes them: `registry` for the ones that aren't platform-specific, plus
+one key per platform:
 
-```bash
-npx @peektravel/app-cli sync-app app.peek.json
+```json
+{
+  "registry": [
+    { "slug": "app_registry_settings_url@v1",
+      "configuration": { "url": "/examples/peek-pro/main", "url_mode": "prepend_base_url" } },
+    { "slug": "app_registry_webhook@v1",
+      "configuration": { "url": "/examples/webhooks/install-status" } }
+  ],
+  "peek": [ { "slug": "peek_backoffice_api@v1", "configuration": {} } ],
+  "acme": null,
+  "cng": null
+}
 ```
 
-**pushes that manifest to the registry**, activating the declared extensions. Extensions are the
-entry points and event hooks that make the app do anything the platform surfaces.
+**That is all the manifest holds.** Which platforms the app runs on is *derived* from these keys
+(a list means it runs there, `null` means it doesn't) — there is no `platforms` array, no
+`base_url`, no app slug, and no name/description/listing copy. The slug lives in
+`.peek-kit.json`; `base_url` is set per environment by `dev` / `use-url`; the store copy is a
+per-platform **listing**, written in the portal.
+
+Push it with:
+
+```bash
+npx @peektravel/app-cli sync-app            # defaults to ./app.json
+npx @peektravel/app-cli sync-app --pull     # overwrite the local file with the registry's copy
+```
+
+**Pushing activates the declared extensions.** Extensions are the entry points and event hooks
+that make the app do anything the platform surfaces.
+
+> **A key you leave out is not a key set to `null`.** An absent platform key means "leave that
+> platform exactly as it is"; `null` means "stop running there". A typo'd key is rejected with a
+> 400 rather than silently ignored. When you edit the manifest, keep every platform key present.
 
 ### List what's available — `extensions list`
 
@@ -162,8 +203,8 @@ npx @peektravel/app-cli@latest extensions show app_registry_webhook@v1 --json
 ```
 
 `extensions show <slug>` lists the extension's type, the platforms it's available on, and its
-configurable fields — i.e. exactly what to put in `app.<platform>.json`. Use it whenever you wire a
-new extension into the manifest.
+configurable fields — i.e. exactly what to put in `app.json`. Use it whenever you wire a new
+extension into the manifest.
 
 ## Hard rules
 
@@ -176,6 +217,8 @@ new extension into the manifest.
 - **Declare `app_registry_webhook@v1` and wipe data on uninstall** whenever the app persists data.
 - **Read `extensions show <slug>` for the manifest config** — don't hand-write extension params from
   memory.
+- **Keep `app.json` a pure manifest.** No slug, no `base_url`, no listing copy, every platform key
+  present. Unknown top-level keys fail the push with a 400.
 - **You can't run `dev` or `auth login` for the user** — they need the user's credentials/browser.
   Hand off.
 

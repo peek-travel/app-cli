@@ -1,14 +1,15 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { requireAccount } from "../lib/auth.js";
 import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
-import { type AppDetails, generateAppDetails, hasClaude, writeAppCopy } from "../lib/claude.js";
+import { type AppDetails, generateAppDetails, hasClaude, writeListingDraft } from "../lib/claude.js";
 import { PLATFORMS } from "../lib/platforms.js";
 import { STACKS } from "../lib/stacks.js";
+import { slugify, writeKitMetadata } from "../lib/project.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import {
@@ -19,27 +20,7 @@ import {
   installDependencies,
   selectPlatformManifest,
   substituteTemplateVars,
-  writeKitMetadata,
 } from "../lib/scaffold.js";
-
-const SLUG_RE = /^[a-z][a-z0-9-]*$/;
-
-function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .trim()
-    // Fold accents to their base letter first ("café" → "cafe") rather than dropping them.
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    // Strip non-standard chars outright (so "Peek's App!" → "peeks-app", not "peek-s-app-").
-    // Only whitespace is a word separator and becomes a dash.
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return SLUG_RE.test(slug) ? slug : `app-${slug}`.replace(/-+$/, "");
-}
 
 export default class Init extends BaseCommand {
   static description = "Scaffold a new Peek app from a starter template";
@@ -149,8 +130,10 @@ export default class Init extends BaseCommand {
     // selected platform's manifest as app.json before the var-substitution/sync steps run.
     await selectPlatformManifest(targetDir, platform);
 
-    // Stamp the app with what created it (starter kit + CLI version) before we cd in.
-    await writeKitMetadata(targetDir, DEFAULT_TEMPLATE, platform, stack);
+    // Stamp the app with what it is — the slug the registry knows it by — plus what created
+    // it (starter kit + CLI version), before we cd in. app.json can't hold the slug: it is
+    // the manifest and only the manifest, and the slug rides in the URL we push to.
+    writeKitMetadata(targetDir, basename(DEFAULT_TEMPLATE), platform, stack, slug);
 
     // Compose the app's Claude skills: generic globals + the selected platform's + stack's
     // skills, into .claude/skills/. This is how skills reach a scaffolded app now that the
@@ -171,8 +154,11 @@ export default class Init extends BaseCommand {
     });
 
     if (details) {
-      const wrote = await writeAppCopy(join(targetDir, "app.json"), details);
-      if (wrote) p.log.step("Wrote your app description and listing (via Claude)");
+      // Store copy is a per-platform LISTING, written and reviewed in the portal — it is
+      // deliberately not in the manifest, so Claude's draft lands in a file the developer
+      // can paste from rather than being pushed anywhere.
+      const wrote = await writeListingDraft(targetDir, appName, details);
+      if (wrote) p.log.step("Drafted your listing copy in LISTING.md (via Claude)");
     }
 
     await gitInit(targetDir);

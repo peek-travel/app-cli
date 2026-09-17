@@ -184,7 +184,7 @@ painful.
   (`withAppAuthentication` → `createAcmeService`), and the server-to-ACME path with no user token.
 - **`acme-webhooks`** — the inbound path (the install-status webhook); reuse the same
   `installDataId` scoping to *act* on events.
-- **`acme-manifest-and-deploy`** — the `acme_backoffice_api@v1` extendable in `app.acme.json` grants
+- **`acme-manifest-and-deploy`** — the `acme_backoffice_api@v1` extendable in `app.json` grants
   this API access.
 - **`peek-backoffice-api`** — the canonical, larger example of a platform capability surface. ACME
   mirrors its *discipline*, not its *capabilities* (no escape hatch, far smaller surface).
