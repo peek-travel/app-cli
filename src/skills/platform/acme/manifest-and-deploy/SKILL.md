@@ -9,7 +9,7 @@ description: >-
   the #1 source of 401s, the shared PEEK_APP_SECRET / PEEK_APP_ID / PEEK_APP_URL / PEEK_API_URL
   env contract (no gatewayKey/mode for ACME), and the Vercel + Neon hosting default. Use when
   editing app.json, setting up env/secrets, registering the app, changing embed/webhook URLs, or
-  deploying. Triggers on "app.json", "app.acme.json", "acme manifest", ".peek-kit.json",
+  deploying. Triggers on "app.json", "app.example.acme.json", "acme manifest", ".peek-kit.json",
   "use-url", "acme_backoffice_api", "deploy acme app", "env vars", "register the acme app",
   "sandbox vs prod", "401 after deploy".
 ---
@@ -37,8 +37,8 @@ Getting an app from this starter kit into an ACME account has three parts: the *
 
 `app.json` declares **what the app plugs into**, and nothing else. It is a flat object of
 extendables keyed by who consumes them — `registry` plus one key per platform. (The starter kit
-ships one per platform, `app.acme.json`; `peek init` materializes the one you picked as
-`app.json`.)
+ships an example per platform, `app.example.acme.json`; `peek init` copies the one you picked to
+`app.json` and deletes the examples, so your app has exactly one manifest.)
 
 ```json
 {

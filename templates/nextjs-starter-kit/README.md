@@ -74,12 +74,16 @@ npm run test:coverage
 - `lib/app-client/api.ts` — token handshake + authenticated `apiFetch`. Shared,
   brand-agnostic client used by both examples and the dashboard.
 - `app/examples/cng/` — the same example wired to the Connect&GO backoffice
-  (`CngAccessService`) instead of Peek. `app.cng.json` points its settings URL
-  here. Both examples share the one `withAppAuthentication` wrapper.
+  (`CngAccessService`) instead of Peek. `app.example.cng.json` points its
+  settings URL here. Both examples share the one `withAppAuthentication` wrapper.
 - `lib/` — env parsing, JWT verification, the per-platform service factories
   (`peek-service`, `cng-service`), and `with-app` — the unified auth wrapper that
   verifies the token then factories the accessor matching its `platform` claim
   (`app-service.ts`).
+- `app.example.<platform>.json` — the kit's example manifests, one per
+  platform. `peek init` copies the one you picked to `app.json` and deletes all
+  of them: a scaffolded app has exactly one manifest. (You are reading the kit,
+  so they're still here.)
 - `app.json` — the app manifest: the extendables the app plugs into, keyed by
   who consumes them (`registry` plus one key per platform). The app's slug lives
   in `.peek-kit.json`, its `base_url` is set per environment by `peek dev` /

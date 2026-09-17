@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execa } from "execa";
@@ -62,6 +62,11 @@ describe("peek init", () => {
     // The slug the registry knows the app by lives in the project file instead.
     const kit = JSON.parse(await readFile(join(targetDir, ".peek-kit.json"), "utf8"));
     expect(kit.app.id).toBe(appName);
+
+    // The kit's example manifests are consumed, not left lying around: a scaffolded app has
+    // exactly one manifest, so there's nothing to edit by mistake.
+    const scaffolded = await readdir(targetDir);
+    expect(scaffolded.filter((f) => f.startsWith("app.example."))).toEqual([]);
 
     const nodeModules = await stat(join(targetDir, "node_modules"));
     expect(nodeModules.isDirectory()).toBe(true);

@@ -8,7 +8,7 @@ description: >-
   hold (slug, base_url, listing copy), the .peek-kit.json project file, the two-app/two-environment split and the #1 source of 401s, the shared PEEK_APP_SECRET / PEEK_APP_ID /
   PEEK_APP_URL / PEEK_API_URL env contract (no gatewayKey/mode for cng), and the Vercel + Neon
   hosting default. Use when editing app.json, setting up env/secrets, registering the app,
-  changing embed/webhook URLs, or deploying. Triggers on "app.json", "app.cng.json", "cng
+  changing embed/webhook URLs, or deploying. Triggers on "app.json", "app.example.cng.json", "cng
   manifest", ".peek-kit.json", "use-url", "cng_backoffice_api", "deploy cng app", "env vars",
   "register the cng app", "sandbox vs prod", "401 after deploy".
 ---
@@ -36,8 +36,8 @@ Getting an app from this starter kit into a cng account has three parts: the **m
 
 `app.json` declares **what the app plugs into**, and nothing else. It is a flat object of
 extendables keyed by who consumes them — `registry` plus one key per platform. (The starter kit
-ships one per platform, `app.cng.json`; `peek init` materializes the one you picked as
-`app.json`.)
+ships an example per platform, `app.example.cng.json`; `peek init` copies the one you picked to
+`app.json` and deletes the examples, so your app has exactly one manifest.)
 
 ```json
 {
