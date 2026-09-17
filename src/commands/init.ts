@@ -1,11 +1,17 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { requireAccount } from "../lib/auth.js";
-import { assertSupportedVersion, detectPackageManager, installArgs } from "../lib/pm.js";
+import {
+  assertInstalled,
+  assertSupportedVersion,
+  detectPackageManager,
+  foreignLockfiles,
+  installArgs,
+} from "../lib/pm.js";
 import { type AppDetails, generateAppDetails, hasClaude, writeListingDraft } from "../lib/claude.js";
 import { PLATFORMS } from "../lib/platforms.js";
 import { STACKS } from "../lib/stacks.js";
@@ -166,7 +172,21 @@ export default class Init extends BaseCommand {
     const pm = detectPackageManager(flags.pm, targetDir);
 
     if (!flags["no-install"]) {
+      // An explicit --pm is the only way to select a package manager we haven't already
+      // confirmed is on PATH; say so here rather than let the install spawn ENOENT.
+      if (flags.pm && flags.pm !== "auto") assertInstalled(pm);
       assertSupportedVersion(pm);
+
+      // The template ships pnpm's lockfile. Installing with anything else leaves it stale
+      // and pointing later commands back at a package manager this machine may not have.
+      const stale = foreignLockfiles(pm, targetDir);
+      for (const lockfile of stale) rmSync(lockfile, { force: true });
+      if (stale.length > 0) {
+        p.log.step(
+          `Removed ${stale.map((file) => basename(file)).join(", ")} — installing with ${pm}`,
+        );
+      }
+
       p.log.step(`Installing dependencies with ${pm}`);
       await installDependencies(pm, installArgs(pm), targetDir);
     }
