@@ -32,7 +32,7 @@ The manifest declares **what capabilities the app requests** — the **extension
 that grant API access, surface the app inside the platform, and register its webhooks — and, from
 which keys carry them, **which platforms the app runs on**. Enumerate the extensions available for
 the platform and read each one's required config with the CLI (`extensions list` / `extensions
-show` — see `cli`); pushing the manifest to the registry is `sync-app` (also `cli`).
+show` — see `cli`); pushing the manifest to the registry is `apps push` (also `cli`).
 
 **What the manifest does not declare is as important as what it does.** Three things sit outside
 it, because they vary independently of the build:
@@ -41,7 +41,7 @@ it, because they vary independently of the build:
   manifest can therefore be pushed at a production app and at a test app.
 - **The origin the app is served from** (its base URL) — the same manifest runs behind a laptop
   tunnel, on staging and in production; only the origin differs. The CLI sets it per environment
-  (`dev`, `use-url`).
+  (`dev`, `apps use-url`).
 - **Everything a customer reads** — name, description, icon, screenshots, categories. That's
   *listing* content, it is **per platform** (the same build can read differently on two stores),
   and it's written and reviewed in the platform's portal, not shipped in the file.
@@ -139,7 +139,7 @@ Deploy to **any Node-capable host**; the concrete recommended host and its build
 ## Related skills
 
 - `cli` — the CLI that drives all of this: `extensions list`/`show` to discover what the manifest
-  can declare, `sync-app` to push the manifest, `dev` to run locally, `use-url` to point an app at
+  can declare, `apps push` to push the manifest, `dev` to run locally, `apps use-url` to point an app at
   a deployed host, and the registry/login preflight checks.
 - `peek-manifest-and-deploy` — the canonical concrete manifest fields, the `PEEK_APP_*` env names,
   the two-manifest sandbox/prod split, the dev-CLI behavior, and the recommended host/DB.

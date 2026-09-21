@@ -6,9 +6,10 @@ platform + tech stack the CLI supports.
 
 > **Delivery note:** this tree is the **single source of truth** that ships. `peek init` composes
 > `global + platform/<platform> + stack/<stack>` into each scaffolded app's `.claude/skills/` via
-> `composeSkills()` (`src/lib/scaffold.ts`, called from `src/commands/init.ts`) — the starter-kit
-> template no longer carries its own skills copy. Edit skills **here**; each is copied to a folder
-> named after its frontmatter `name`.
+> `composeSkills()` (`src/lib/scaffold.ts`) — the starter-kit template no longer carries its own
+> skills copy. `peek apps link` composes the same set into a codebase the CLI didn't scaffold, and
+> `peek skills` re-composes it in place (e.g. after a CLI upgrade). Edit skills **here**; each is
+> copied to a folder named after its frontmatter `name`.
 
 ## The three axes
 

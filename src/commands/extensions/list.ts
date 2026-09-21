@@ -1,12 +1,10 @@
 import { Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { BaseCommand } from "../../base-command.js";
-import { CLIError } from "../../errors.js";
 import { ensureLoggedIn } from "../../lib/auth.js";
 import { listExtensions, platformsSummary } from "../../lib/extensions.js";
 import { PLATFORM_VALUES, platformLabel } from "../../lib/platforms.js";
-import { confirmRegistryOverride } from "../../lib/registry.js";
-import { failure } from "../../lib/ui.js";
+import { confirmRegistryOverride, warnOnStderrForSession } from "../../lib/registry.js";
 
 export default class ExtensionsList extends BaseCommand {
   static description = "List the extensions (extendables) available to apps in the registry";
@@ -30,13 +28,15 @@ export default class ExtensionsList extends BaseCommand {
   async run(): Promise<void> {
     const { flags } = await this.parse(ExtensionsList);
 
-    // --json is a machine surface: skip the clack chrome so stdout is pure JSON.
-    if (!flags.json) p.intro("peek extensions list");
+    // --json is a machine surface: no clack chrome, and the registry-override warning
+    // routed to stderr, so stdout carries nothing but the JSON.
+    if (flags.json) warnOnStderrForSession();
+    else p.intro("peek extensions list");
 
     await confirmRegistryOverride();
     await ensureLoggedIn();
 
-    try {
+    await this.guard(async () => {
       const extensions = await listExtensions(flags.platform, flags.debug);
 
       if (flags.json) {
@@ -65,12 +65,6 @@ export default class ExtensionsList extends BaseCommand {
 
       p.log.message(body);
       p.outro(`${rows.length} extension${rows.length === 1 ? "" : "s"} ${scope}.`);
-    } catch (error) {
-      if (error instanceof CLIError) {
-        failure(error.message, error.suggestion);
-        this.exit(1);
-      }
-      throw error;
-    }
+    });
   }
 }

@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
 import { CLIError } from "../errors.js";
+import { type Manifest, writeManifest } from "./manifest.js";
 
 // The default starter kit is vendored into the CLI package under templates/ (see the
 // package.json "files" list) so `peek init` works offline and always ships a known-good
@@ -74,19 +75,30 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
 // invites the two failure modes we'd never see reported: editing the example instead of the
 // real file, and pushing a manifest for a platform the app isn't built for. The kit keeps
 // them; the app doesn't need them.
+//
+// `override` is for `peek init --app <slug>`, which scaffolds a kit for an app that already
+// exists: there the app's own manifest — pulled from the registry — is the truth, and the
+// kit's example would overwrite live extendable declarations with example ones. The examples
+// are still cleared out either way.
 export async function selectPlatformManifest(
   targetDir: string,
   platform: string,
+  override?: Manifest,
 ): Promise<void> {
-  const src = join(targetDir, EXAMPLE_MANIFEST(platform));
   const dest = join(targetDir, "app.json");
-  if (!existsSync(src)) {
-    throw new CLIError(
-      `Template has no ${EXAMPLE_MANIFEST(platform)}`,
-      "The starter kit must ship an example manifest for the selected platform.",
-    );
+
+  if (override) {
+    writeManifest(dest, override);
+  } else {
+    const src = join(targetDir, EXAMPLE_MANIFEST(platform));
+    if (!existsSync(src)) {
+      throw new CLIError(
+        `Template has no ${EXAMPLE_MANIFEST(platform)}`,
+        "The starter kit must ship an example manifest for the selected platform.",
+      );
+    }
+    await cp(src, dest);
   }
-  await cp(src, dest);
 
   for (const entry of readdirSync(targetDir)) {
     if (EXAMPLE_MANIFEST_RE.test(entry)) {

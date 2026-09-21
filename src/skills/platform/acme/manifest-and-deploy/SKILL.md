@@ -10,7 +10,7 @@ description: >-
   env contract (no gatewayKey/mode for ACME), and the Vercel + Neon hosting default. Use when
   editing app.json, setting up env/secrets, registering the app, changing embed/webhook URLs, or
   deploying. Triggers on "app.json", "app.example.acme.json", "acme manifest", ".peek-kit.json",
-  "use-url", "acme_backoffice_api", "deploy acme app", "env vars", "register the acme app",
+  "apps use-url", "acme_backoffice_api", "deploy acme app", "env vars", "register the acme app",
   "sandbox vs prod", "401 after deploy".
 ---
 
@@ -76,12 +76,12 @@ are rejected with a 400):**
 
 | Not in the manifest | Where it lives |
 | --- | --- |
-| The app's **slug** | `.peek-kit.json` (`app.id`), and in the URL the CLI pushes to — which is what lets one manifest be pushed at your real app *and* at its test app. |
-| **`base_url`** | Set per environment: `peek dev` points the test app at the tunnel, `peek use-url <url>` points an app at a deployed host. |
+| The app's **slug** | `.peek-kit.json` (`app.id`), and in the URL the CLI pushes to — which is what lets one manifest be pushed at your real app *and* at its test app. Written by `peek init`; for a codebase the CLI didn't scaffold, by `peek apps link <slug>` (see `cli`). |
+| **`base_url`** | Set per environment: `peek dev` points the test app at the tunnel, `peek apps use-url <url>` points an app at a deployed host. |
 | **Name, description, icon, screenshots, categories** | A per-platform **listing**, written and reviewed in the portal (*Apps → your app → Distribution*). |
 
 > When you change the embed path or add/point a webhook or MCP endpoint, update `app.json` and push
-> it (`peek sync-app`); `peek dev` pushes it for you on every restart.
+> it (`peek apps push`); `peek dev` pushes it for you on every restart.
 
 > **Slug note:** the manifest requests the extendable as `acme_backoffice_api@v1`. Internally the
 > SDK routes REST calls through the gateway path segment `acme_backoffice_api-v1` — you don't set
@@ -97,7 +97,7 @@ discipline as Peek applies:
 | --- | --- | --- |
 | Slug | your real slug, `.peek-kit.json` `app.id` | the test slug the registry derives, `app.testId` |
 | Manifest | `app.json` — the **same file** is pushed at both | same `app.json` |
-| `base_url` | your deployed URL, set with `peek use-url <url> --prod` | the ephemeral tunnel URL, re-set on each `peek dev` run |
+| `base_url` | your deployed URL, set with `peek apps use-url <url> --prod` | the ephemeral tunnel URL, re-set on each `peek dev` run |
 | Installations API | **prod** (`PEEK_API_URL` default) | **sandbox** |
 | id + secret live in | the **host's** env, set at deploy | `.env.local` (written by the dev CLI) |
 
@@ -162,12 +162,12 @@ green (lint → typecheck → test w/ coverage → build). Any Node-capable host
       prod app's, not the dev/test app's).
 - [ ] Vercel project created and connected to the repo.
 - [ ] `PEEK_APP_URL` set to the deployed URL, and the **prod app** pointed at the same origin:
-      `peek use-url https://<your-host> --prod` (that is what sets `base_url` — it is not a field
+      `peek apps use-url https://<your-host> --prod` (that is what sets `base_url` — it is not a field
       in `app.json`).
 - [ ] Host env is one **coherent prod set**: `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_APP_URL`, and
       `PEEK_API_URL` (prod default — don't carry over the sandbox URL); Neon `DATABASE_URL` if used.
 - [ ] Declare the embed URL (`<base_url>/examples/acme/main`) and the install-status webhook (and any
-      MCP URL) in `app.json` and push it (`peek sync-app`); validate in **sandbox** first.
+      MCP URL) in `app.json` and push it (`peek apps push`); validate in **sandbox** first.
 - [ ] Write the **listing** (name, description, icon, screenshots) in the portal under
       *Apps → your app → Distribution* — none of it comes from `app.json`.
 - [ ] Confirm the embed loads in the iframe (CSP `frame-ancestors` set in `next.config.ts`).

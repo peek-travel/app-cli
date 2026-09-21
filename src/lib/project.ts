@@ -23,10 +23,11 @@ const { version: CLI_VERSION } = createRequire(import.meta.url)("../../package.j
 export const PROJECT_FILE = ".peek-kit.json";
 
 export interface ProjectApp {
-  // The source app's slug — what `peek sync-app` pushes to and what ships to production.
+  // The source app's slug — what `peek apps sync` pushes to and what ships to production.
   id?: string;
   // The test app cloned from it, which is what `peek dev` publishes at the tunnel URL. The
-  // registry derives the slug (`<id>-dev`), we just remember what it handed back.
+  // registry derives the slug (`<id>-test-<identifier>`, identifier "dev" unless asked
+  // otherwise, truncated to 50 chars), we just remember what it handed back.
   testId?: string;
 }
 
@@ -37,6 +38,10 @@ export interface ProjectFile {
   platform?: string;
   stack?: string;
   createdAt?: string;
+  // When this directory was pointed at an existing registry app by `peek apps link` rather than
+  // scaffolded by `peek init`. Mutually exclusive with starterKit in practice, and the one
+  // signal that the code here predates the app it publishes to.
+  linkedAt?: string;
 }
 
 function projectPath(cwd: string): string {
@@ -93,6 +98,27 @@ export function writeKitMetadata(
   });
 }
 
+// Record that an EXISTING codebase now publishes to an existing registry app. Deliberately
+// not writeKitMetadata: nothing scaffolded this directory, so there is no starter kit to
+// name and no creation date to claim — only which app it pushes to, and the axes its skills
+// were composed for (absent when we couldn't work them out and composed nothing).
+export function writeLinkMetadata(
+  cwd: string,
+  appId: string,
+  axes: { platform?: string; stack?: string } = {},
+): void {
+  const patch: ProjectFile = {
+    app: { id: appId },
+    cliVersion: CLI_VERSION,
+    linkedAt: new Date().toISOString(),
+  };
+  // Only set what we know — spreading an undefined platform over a recorded one would
+  // silently forget it (JSON.stringify drops the key).
+  if (axes.platform) patch.platform = axes.platform;
+  if (axes.stack) patch.stack = axes.stack;
+  updateProject(cwd, patch);
+}
+
 const SLUG_RE = /^[a-z][a-z0-9-]*$/;
 
 // Turn a human app name (or a package.json name) into a registry slug. The registry allows
@@ -143,21 +169,28 @@ export interface ResolvedAppId {
 // then on.
 export function resolveAppId(
   cwd: string,
-  options: { flag?: string; legacyAppId?: string } = {},
+  options: { flag?: string; legacyAppId?: string; persist?: boolean } = {},
 ): ResolvedAppId {
+  // Recording what we had to derive is the point of this function — it's what makes the
+  // answer stable from then on. `persist: false` is for a caller that has to VALIDATE the
+  // answer first (the dev loop refuses a test app), so a slug it rejects is never written.
+  const record = (patch: { id: string }): void => {
+    if (options.persist !== false) updateProject(cwd, { app: patch });
+  };
+
   if (options.flag) return { appId: options.flag, source: "flag" };
 
   const recorded = readProject(cwd).app?.id;
   if (recorded) return { appId: recorded, source: "project" };
 
   if (options.legacyAppId) {
-    updateProject(cwd, { app: { id: options.legacyAppId } });
+    record({ id: options.legacyAppId });
     return { appId: options.legacyAppId, source: "manifest" };
   }
 
   const derived = packageSlug(cwd);
   if (derived) {
-    updateProject(cwd, { app: { id: derived } });
+    record({ id: derived });
     return { appId: derived, source: "package" };
   }
 
@@ -165,6 +198,77 @@ export function resolveAppId(
     "Could not work out which app this is.",
     `Add {"app": {"id": "your-app-slug"}} to ${PROJECT_FILE}, or pass --app <slug>.`,
   );
+}
+
+// Which app slug a manifest move (`peek apps push` / `peek apps pull`) targets: an explicit
+// --app wins, then --test (this project's test app), then the app this directory publishes
+// to. A legacy manifest still carrying `.data.app.id` names its own app, so an un-migrated
+// project resolves too.
+export function targetAppId(
+  cwd: string,
+  options: { flag?: string; test?: boolean; manifestFile?: string } = {},
+): string {
+  if (options.flag) return options.flag;
+
+  if (options.test) {
+    const testId = readProject(cwd).app?.testId;
+    if (!testId) {
+      throw new CLIError(
+        "This project has no test app yet.",
+        "Run `peek dev` once to create one, or pass --app <slug>.",
+      );
+    }
+    return testId;
+  }
+
+  return resolveAppId(cwd, { legacyAppId: legacySlug(options.manifestFile) }).appId;
+}
+
+function legacySlug(file?: string): string | undefined {
+  if (!file) return undefined;
+  try {
+    return loadManifest(file).legacyAppId;
+  } catch {
+    // An unreadable/invalid manifest is the push's problem to report, not the slug
+    // lookup's — fall through to the project file.
+    return undefined;
+  }
+}
+
+// A directory with no project file isn't necessarily a Peek app — it may be an existing
+// codebase someone ran `peek dev` / `peek tunnel` in. Left alone we'd derive a slug from
+// package.json and CREATE that app in the registry, which quietly makes a second app beside
+// the one they meant to develop against. Cheap to confirm, expensive to undo.
+//
+// Returns false when the developer declined, so the caller can stop before it opens a
+// tunnel or starts a server.
+export async function confirmDerivedAppId(
+  cwd: string,
+  options: { appFlag?: string; yes?: boolean; manifestFile?: string } = {},
+): Promise<boolean> {
+  if (options.appFlag) return true;
+  if (readProject(cwd).app?.id) return true;
+  // A legacy manifest carries the app's own slug at .data.app.id and outranks anything we
+  // could derive, so there is nothing being guessed here — warning about package.json
+  // would name an app this run isn't going to touch.
+  if (legacySlug(options.manifestFile)) return true;
+
+  // No package.json name to derive from: resolveAppId raises its own (good) error later.
+  const derived = packageSlug(cwd);
+  if (!derived) return true;
+
+  p.log.warn(
+    [
+      `This directory isn't linked to a registry app yet (no ${PROJECT_FILE}).`,
+      `Continuing will develop against "${derived}", taken from package.json — and create that app if nothing has the slug.`,
+      "To use an app that already exists instead, run `peek apps link` or pass --app <slug>.",
+    ].join("\n"),
+  );
+
+  if (options.yes || !process.stdin.isTTY) return true;
+
+  const answer = await p.confirm({ message: `Use "${derived}"?`, initialValue: false });
+  return !p.isCancel(answer) && answer === true;
 }
 
 // The generated test-app manifest the old dev loop kept beside app.json. It has no job
@@ -176,6 +280,9 @@ export const LEGACY_DEV_FILE = "app-dev.json";
 export interface OpenedProject {
   manifest: Manifest;
   appId: string;
+  // Where the slug came from, so a caller that deferred recording it (persist: false) can
+  // record it once it's satisfied, and only if it wasn't already on file.
+  appIdSource: ResolvedAppId["source"];
   // The test app this project already has, if we know of one. Absent on a fresh project —
   // `peek dev` asks the registry for one and records it.
   testAppId?: string;
@@ -194,7 +301,7 @@ export interface OpenedProject {
 export function openProject(
   cwd: string,
   appFile: string,
-  options: { appIdFlag?: string; quiet?: boolean } = {},
+  options: { appIdFlag?: string; quiet?: boolean; persist?: boolean } = {},
 ): OpenedProject {
   const step = (message: string): void => {
     if (!options.quiet) p.log.step(message);
@@ -209,12 +316,16 @@ export function openProject(
     );
     if (legacyBaseUrl) {
       step(
-        `Dropped base_url (${legacyBaseUrl}) from the manifest — it's set per environment now, by \`peek dev\` and \`peek use-url\`.`,
+        `Dropped base_url (${legacyBaseUrl}) from the manifest — it's set per environment now, by \`peek dev\` and \`peek apps use-url\`.`,
       );
     }
   }
 
-  const { appId } = resolveAppId(cwd, { flag: options.appIdFlag, legacyAppId });
+  const { appId, source } = resolveAppId(cwd, {
+    flag: options.appIdFlag,
+    legacyAppId,
+    persist: options.persist,
+  });
 
   let testAppId = readProject(cwd).app?.testId;
 
@@ -228,7 +339,7 @@ export function openProject(
     );
   }
 
-  return { manifest, appId, testAppId };
+  return { manifest, appId, testAppId, appIdSource: source };
 }
 
 function readLegacyTestAppId(file: string): string | undefined {

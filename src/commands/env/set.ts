@@ -1,14 +1,20 @@
 import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
-import { BaseCommand } from "../base-command.js";
-import { CLIError } from "../errors.js";
-import { clearRegistryOverride, getRegistryUrl, setRegistryOverride } from "../lib/registry.js";
+import { BaseCommand } from "../../base-command.js";
+import { CLIError } from "../../errors.js";
+import { clearRegistryOverride, getRegistryUrl, setRegistryOverride } from "../../lib/registry.js";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
-export default class SetEnv extends BaseCommand {
+export default class EnvSet extends BaseCommand {
   static description = "Override the registry URL the CLI talks to (registry developers only)";
   static hidden = true;
+
+  // Was `peek set-env` before the surface was organized into topics.
+  // hiddenAliases, not aliases: it still resolves and still warns, but the retired name
+  // is not offered to anyone reading `peek --help` for the first time.
+  static hiddenAliases = ["set-env"];
+  static deprecateAliases = true;
 
   static args = {
     url: Args.string({ description: "Registry base URL, e.g. https://app-registry-dev.example.com" }),
@@ -19,9 +25,9 @@ export default class SetEnv extends BaseCommand {
   };
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(SetEnv);
+    const { args, flags } = await this.parse(EnvSet);
 
-    p.intro("peek set-env");
+    p.intro("peek env set");
 
     if (flags.clear) {
       clearRegistryOverride();
@@ -30,7 +36,7 @@ export default class SetEnv extends BaseCommand {
     }
 
     if (!args.url) {
-      throw new CLIError("A registry URL is required.", "Usage: peek set-env <url>, or peek set-env --clear");
+      throw new CLIError("A registry URL is required.", "Usage: peek env set <url>, or peek env set --clear");
     }
 
     let parsed: URL;

@@ -11,24 +11,32 @@ import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import { checkTestIdentifier } from "../lib/sync.js";
 
-// The whole local loop in one command: start the app, put it behind a public URL, and
-// publish the test app at that URL so it can be installed and used for real. If the app is
-// already running — started by a compose file, a debugger, another terminal — `peek tunnel`
-// is this minus the starting.
-export default class Dev extends BaseCommand {
+// `peek dev` = this, plus starting the app for you. Splitting them out matters for the
+// codebase the CLI didn't scaffold: its server is started by something the developer
+// already has (a compose file, a debugger, a watcher in another terminal, a framework
+// command with its own flags), and the only thing missing is the half only the CLI can do —
+// a public URL, and a test app in the registry published at it.
+export default class Tunnel extends BaseCommand {
   static description =
-    "Start the app, expose it on a public URL, and publish your test app at that URL";
+    "Expose an app you're already running on a public URL, and publish your test app at it";
 
   static examples = [
-    "<%= config.bin %> dev",
-    "<%= config.bin %> dev --app my-existing-app",
-    '<%= config.bin %> dev --cmd "make serve"',
-    "<%= config.bin %> dev --test greg",
+    "<%= config.bin %> tunnel",
+    "<%= config.bin %> tunnel --port 8080",
+    "<%= config.bin %> tunnel --app other-app",
+    "<%= config.bin %> tunnel --no-env",
+    "<%= config.bin %> tunnel --port 4000 --test greg",
   ];
 
   static flags = {
-    port: Flags.integer({ description: "Local port the dev server listens on", default: 3000 }),
-    "no-sync": Flags.boolean({ description: "Skip pushing anything to the registry", default: false }),
+    port: Flags.integer({
+      description: "Port your app is already listening on",
+      default: 3000,
+    }),
+    "no-sync": Flags.boolean({
+      description: "Just open the tunnel — push nothing to the registry",
+      default: false,
+    }),
     test: Flags.string({
       description:
         "Name your own test app (<app>-test-<name>) instead of the shared one every `dev` run uses",
@@ -37,9 +45,9 @@ export default class Dev extends BaseCommand {
     app: Flags.string({
       description: "App slug to develop against (defaults to the one in .peek-kit.json)",
     }),
-    cmd: Flags.string({
-      description:
-        'Shell command that starts the app instead of "<pm> run dev" (e.g. "make serve"). It must listen on $PORT.',
+    "no-env": Flags.boolean({
+      description: "Don't write PEEK_APP_URL / PEEK_APP_ID / PEEK_APP_SECRET to .env.local",
+      default: false,
     }),
     domain: Flags.string({
       description:
@@ -53,32 +61,23 @@ export default class Dev extends BaseCommand {
   };
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(Dev);
+    const { flags } = await this.parse(Tunnel);
     const cwd = process.cwd();
 
-    p.intro("peek dev");
+    p.intro("peek tunnel");
 
     // Wrapped so a CLIError's suggestion is printed too — oclif prints only .message,
     // which would drop the "link to <source> instead" half of a refusal.
     await this.guard(async () => {
+      // Only the registry half needs a manifest. `--no-sync` is a bare tunnel, which is
+      // useful in any directory at all.
       const appFile = join(cwd, "app.json");
-      if (!existsSync(appFile)) {
+      if (!flags["no-sync"] && !existsSync(appFile)) {
         throw new CLIError(
           "No app.json in the current directory.",
-          "Run this from inside a Peek app directory. For a codebase that isn't one yet, `peek apps link <app-slug>` brings an existing app's manifest down beside it, and `peek init` scaffolds a new app.",
+          "Run `peek apps link <app-slug>` to bring an existing app's manifest down beside this codebase, or pass --no-sync to open a tunnel without touching the registry.",
         );
       }
-
-      // package.json is only needed for the default `<pm> run dev`. With --cmd the app may not
-      // be a Node project at all, which is the whole point of the flag.
-      if (!flags.cmd && !existsSync(join(cwd, "package.json"))) {
-        throw new CLIError(
-          "No package.json in the current directory.",
-          'Run this from inside the app, pass --cmd "<command>" if it isn\'t started by an npm script, or use `peek tunnel` if you start it yourself.',
-        );
-      }
-
-      const pm = detectPackageManager("auto", cwd);
 
       // Auth/registry prompts run BEFORE the tunnel so a declined prompt can't orphan cloudflared.
       if (!flags["no-sync"]) {
@@ -97,13 +96,16 @@ export default class Dev extends BaseCommand {
       await serveWithTunnel({
         cwd,
         appFile,
-        pm,
+        // Nothing is spawned in attach mode, so the package manager is irrelevant — but
+        // ServeOptions wants one, and detecting it costs a file read.
+        pm: detectPackageManager("auto", cwd),
         port: flags.port,
         sync: !flags["no-sync"],
         domain: flags.domain,
         appId: flags.app,
         testIdentifier: flags.test ? checkTestIdentifier(flags.test) : undefined,
-        command: flags.cmd,
+        attach: true,
+        writeEnv: !flags["no-env"],
       });
     });
   }

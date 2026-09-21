@@ -6,12 +6,12 @@ description: >-
   platform, the registry settings URL that is the embed URL Peek POSTs to), what app.json
   deliberately does NOT hold (slug, base_url, listing copy), the .peek-kit.json project file, the
   two-app/two-environment split (your app in prod vs its test app in sandbox), what
-  `npx @peektravel/app-cli dev` does, `use-url` at deploy time, the PEEK_APP_SECRET / PEEK_APP_ID /
+  `npx @peektravel/app-cli dev` does, `apps use-url` at deploy time, the PEEK_APP_SECRET / PEEK_APP_ID /
   PEEK_APP_URL / PEEK_API_URL env contract, the Peek Development Hub, and the Vercel + Neon (not
   Supabase) hosting recommendation. Use when editing app.json, setting up env/secrets, registering
   the app with Peek, changing the embed/webhook URLs, or deploying. Triggers on "app.json",
   "manifest", ".peek-kit.json", "Development Hub", "deploy", "Vercel", "Neon", "Supabase", "env
-  vars", "secrets", "register the app", "peek dev", "use-url", "sandbox vs prod", "test app",
+  vars", "secrets", "register the app", "peek dev", "apps use-url", "sandbox vs prod", "test app",
   "401 after deploy", "which manifest".
 ---
 
@@ -81,17 +81,21 @@ extendables keyed by who consumes them — `global` plus one key per platform:
 | Not in the manifest | Where it lives |
 | --- | --- |
 | The app's **slug** | `.peek-kit.json` (`app.id`), and in the URL the CLI pushes to. One manifest can therefore be pushed at your real app *and* at its test app. |
-| **`base_url`** | Set per environment: `peek dev` points the test app at the tunnel, `peek use-url <url>` points an app at a deployed host. |
+| **`base_url`** | Set per environment: `peek dev` points the test app at the tunnel, `peek apps use-url <url>` points an app at a deployed host. |
 | **Name, description, icon, screenshots, categories** | A per-platform **listing**, written and reviewed in the portal (*Apps → your app → Distribution*). The same build can read differently on PeekPRO and ACME, so it cannot live in the file that describes the build. `peek init --with-claude` drafts this copy into `LISTING.md` for you to paste in. |
 
 > When you change the embed path or add a webhook/MCP endpoint, update `app.json` and push it
-> (`peek sync-app`); `peek dev` pushes it for you on every restart.
+> (`peek apps push`); `peek dev` pushes it for you on every restart.
 
 ### `.peek-kit.json` — the project file
 
 Committed, CLI-owned, and small: `app.id` (the app this directory publishes to), `app.testId`
 (the test app the dev loop uses), plus the starter kit / CLI version / platform it was scaffolded
 with. **Don't hand-edit `app.id` on a live app** — it is the identity the registry knows you by.
+
+`peek init` writes it when it scaffolds. A directory the CLI didn't scaffold gets it from
+**`peek apps link <slug>`**, which also pulls the app's manifest into `app.json` — that's the supported
+way to point existing code at an existing app, rather than hand-writing the file (see `cli`).
 
 ## The two-app / two-environment split — the #1 source of 401s
 
@@ -101,9 +105,9 @@ straight:
 
 | | **Source / production app** | **Dev / test app** |
 | --- | --- | --- |
-| Slug | your real slug, `.peek-kit.json` `app.id` (e.g. `guide-shift`) | the test slug the registry derives, `app.testId` (e.g. `guide-shift-test-dev`) |
+| Slug | your real slug, `.peek-kit.json` `app.id` (e.g. `example-app`) | the test slug the registry derives, `app.testId` (e.g. `example-app-test-dev`). `peek apps list --test-apps` shows these, labelled with the app each clones; the CLI refuses to `link`/`init` one |
 | Manifest | `app.json` — the **same file** is pushed at both | same `app.json` |
-| `base_url` | your deployed URL, set with `peek use-url <url> --prod` | the ephemeral **tunnel URL**, re-set on every `peek dev` run |
+| `base_url` | your deployed URL, set with `peek apps use-url <url> --prod` | the ephemeral **tunnel URL**, re-set on every `peek dev` run |
 | Installations API | `https://apps.peek.com/installations-api` (`PEEK_API_URL` default) | same — `https://apps.peek.com/installations-api` |
 | id + secret live in | the **host's** env, set by you at deploy | `.env.local`, written by `peek dev` |
 
@@ -150,7 +154,7 @@ cross the streams.
 | --- | --- |
 | **Webhook 401** (delivery rejected) | Wrong `PEEK_APP_SECRET` — the webhook validates the secret only |
 | **Back-office 401** (peek-auth passes, API call rejected) | Wrong `PEEK_API_URL` env — pointed at the wrong environment (prod vs sandbox) for where the app is registered |
-| **Back-office 404** (auth passes, gateway not found) | Wrong `PEEK_APP_ID` (it's in the gateway path — see above) **or** an unsynced/undeclared extendable (`peek_backoffice_api@v1` missing from `app.json` / not re-synced — run `peek sync-app`) |
+| **Back-office 404** (auth passes, gateway not found) | Wrong `PEEK_APP_ID` (it's in the gateway path — see above) **or** an unsynced/undeclared extendable (`peek_backoffice_api@v1` missing from `app.json` / not re-synced — run `peek apps push`) |
 
 > There is no second manifest file to keep in step any more — the test app is a *slug*, not a file.
 > (An app scaffolded before this change carries an `app-dev.json`; the CLI migrates it away the
@@ -224,13 +228,13 @@ host works.
       prod app's, **not** the `peek dev` test app's).
 - [ ] Vercel project created and connected to the repo.
 - [ ] `PEEK_APP_URL` set to the deployed URL, and the **prod app** pointed at the same origin:
-      `peek use-url https://<your-host> --prod` (this is what sets `base_url` — it is not a field
+      `peek apps use-url https://<your-host> --prod` (this is what sets `base_url` — it is not a field
       you can edit in `app.json`).
 - [ ] Host env is one **coherent prod set**: `PEEK_APP_SECRET`, `PEEK_APP_ID`, `PEEK_APP_URL`, and
       `PEEK_API_URL` (prod default — do **not** carry over the sandbox URL from `.env.local`); Neon
       `DATABASE_URL` if used.
 - [ ] Declare the embed URL (`<base_url>/examples/peek-pro/main`) and any webhook/MCP URLs in
-      `app.json` and push it (`peek sync-app`); validate in **sandbox** (the `peek dev` test app)
+      `app.json` and push it (`peek apps push`); validate in **sandbox** (the `peek dev` test app)
       first.
 - [ ] Write the **listing** (name, description, icon, screenshots) in the portal under
       *Apps → your app → Distribution* — none of it comes from `app.json`.
@@ -240,7 +244,7 @@ host works.
 ## Related skills
 
 - **`cli`** (global) — the `@peektravel/app-cli` commands used throughout here: `peek dev`,
-  `sync-app`, `use-url`, `extensions list`/`show`, plus `show-env` / `auth whoami` preflight and
+  `apps push`, `apps use-url`, `extensions list`/`show`, plus `env show` / `auth whoami` preflight and
   `--skip-env-confirm`.
 - **`manifest-and-deploy`** (global) — the generic manifest→registry, 2-env-401, env-coherence
   concept behind this skill.

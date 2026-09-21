@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadManifest, manifestPlatforms, writeManifest } from "./manifest.js";
+import {
+  emptyManifest,
+  loadManifest,
+  manifestPlatforms,
+  solePlatform,
+  writeManifest,
+} from "./manifest.js";
 import { CLIError } from "../errors.js";
 
 function manifestFile(contents: unknown): string {
@@ -139,5 +145,25 @@ describe("writeManifest", () => {
     writeManifest(file, manifest);
 
     expect(loadManifest(file).manifest).toEqual(manifest);
+  });
+});
+
+describe("deriving a platform", () => {
+  it("names the platform when a manifest targets exactly one", () => {
+    expect(solePlatform({ global: [], peek: [], acme: null, cng: null })).toBe("peek");
+  });
+
+  it("won't guess for a manifest that targets several, or none", () => {
+    expect(solePlatform({ global: [], peek: [], acme: [], cng: null })).toBeUndefined();
+    expect(solePlatform({ global: [], peek: null, acme: null, cng: null })).toBeUndefined();
+  });
+});
+
+describe("emptyManifest", () => {
+  it("targets one platform and switches the rest off", () => {
+    // Every platform key is present: an absent key means "leave it as it is", which is not
+    // what a fresh manifest wants to say.
+    expect(emptyManifest("acme")).toEqual({ global: [], peek: null, acme: [], cng: null });
+    expect(manifestPlatforms(emptyManifest("acme"))).toEqual(["acme"]);
   });
 });
