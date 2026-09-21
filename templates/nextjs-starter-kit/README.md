@@ -87,7 +87,7 @@ npm run test:coverage
 - `app.json` — the app manifest: the extendables the app plugs into, keyed by
   who consumes them (`global` plus one key per platform). The app's slug lives
   in `.peek-kit.json`, its `base_url` is set per environment by `peek dev` /
-  `peek use-url`, and its store copy is a listing written in the portal.
+  `peek apps use-url`, and its store copy is a listing written in the portal.
 - `.peek-kit.json` — which app in the registry this project publishes to, the
   test app the dev loop uses, and what scaffolded it. Committed.
 

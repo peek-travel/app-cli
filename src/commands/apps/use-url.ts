@@ -1,16 +1,26 @@
 import { Flags, Args } from "@oclif/core";
 import * as p from "@clack/prompts";
-import { BaseCommand } from "../base-command.js";
-import { CLIError } from "../errors.js";
-import { ensureLoggedIn } from "../lib/auth.js";
-import { readProject } from "../lib/project.js";
-import { confirmRegistryOverride } from "../lib/registry.js";
-import { publishDraft, setBaseUrl } from "../lib/sync.js";
-import { failure } from "../lib/ui.js";
+import { BaseCommand } from "../../base-command.js";
+import { CLIError } from "../../errors.js";
+import { ensureLoggedIn } from "../../lib/auth.js";
+import { readProject } from "../../lib/project.js";
+import { confirmRegistryOverride } from "../../lib/registry.js";
+import { publishDraft, setBaseUrl } from "../../lib/sync.js";
 
-export default class UseUrl extends BaseCommand {
+export default class AppsUseUrl extends BaseCommand {
   static description =
     "Point an app at a permanent base URL (e.g. a deployed host) and publish it";
+
+  // Was `peek use-url` before the surface was organized into topics.
+  // hiddenAliases, not aliases: it still resolves and still warns, but the retired name
+  // is not offered to anyone reading `peek --help` for the first time.
+  static hiddenAliases = ["use-url"];
+  static deprecateAliases = true;
+
+  static examples = [
+    "<%= config.bin %> apps use-url https://myapp.fly.dev",
+    "<%= config.bin %> apps use-url https://myapp.fly.dev --prod",
+  ];
 
   static args = {
     url: Args.string({ description: "The base URL the app is served from, e.g. https://myapp.fly.dev", required: true }),
@@ -30,10 +40,10 @@ export default class UseUrl extends BaseCommand {
   };
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(UseUrl);
+    const { args, flags } = await this.parse(AppsUseUrl);
     const cwd = process.cwd();
 
-    p.intro("peek use-url");
+    p.intro("peek apps use-url");
 
     const url = normalizeUrl(args.url);
     const appId = this.targetApp(cwd, flags);
@@ -41,7 +51,7 @@ export default class UseUrl extends BaseCommand {
     await confirmRegistryOverride();
     await ensureLoggedIn();
 
-    try {
+    await this.guard(async () => {
       // Publishing makes the new origin live for everyone who has the app installed, so
       // say what's about to happen and get a yes — loudly for a production app.
       if (!flags.yes) {
@@ -56,10 +66,7 @@ export default class UseUrl extends BaseCommand {
           ? "This publishes a new PRODUCTION version. Continue?"
           : "Continue?";
         const answer = await p.confirm({ message, initialValue: false });
-        if (p.isCancel(answer) || !answer) {
-          p.outro("Aborted.");
-          return;
-        }
+        if (p.isCancel(answer) || !answer) throw new CLIError("Aborted.");
       }
 
       // base_url isn't in the manifest — it's its own endpoint, written onto the draft
@@ -75,15 +82,10 @@ export default class UseUrl extends BaseCommand {
       if (links.length > 0) {
         p.note(links.map(([label, link]) => `  ${label}  ${link}`).join("\n"), "Install links");
       }
-    } catch (error) {
-      if (error instanceof CLIError) {
-        failure(error.message, error.suggestion);
-        this.exit(1);
-      }
-      throw error;
-    }
 
-    p.outro(`Done — ${appId} now answers at ${url}`);
+      // Inside the guard: a declined confirm aborts, and an abort must not print a "done".
+      p.outro(`Done — ${appId} now answers at ${url}`);
+    });
   }
 
   private targetApp(cwd: string, flags: { app?: string; prod: boolean }): string {

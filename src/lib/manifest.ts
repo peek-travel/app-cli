@@ -215,6 +215,20 @@ export function loadManifest(file: string): LoadedManifest {
   return { manifest: validate(renamed.json, file), converted: renamed.converted };
 }
 
+// A valid manifest that declares nothing and targets exactly one platform: no extendables
+// anywhere, every other platform switched off. This is what `peek apps link` writes when the
+// registry has no version to export (an app created in the portal and never pushed to) —
+// the starter kit's example manifest would be wrong there, since its extendable URLs point
+// at routes only the kit has. An app with this manifest surfaces nothing until the
+// developer declares extendables (see `peek extensions list`).
+export function emptyManifest(platform: string): Manifest {
+  const manifest: Manifest = { [GLOBAL_KEY]: [] };
+  for (const value of PLATFORM_VALUES) {
+    manifest[value] = value === platform ? [] : null;
+  }
+  return manifest;
+}
+
 export function writeManifest(file: string, manifest: Manifest): void {
   writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
@@ -223,4 +237,13 @@ export function writeManifest(file: string, manifest: Manifest): void {
 // line the CLI prints, never sent to the registry — it derives this itself.
 export function manifestPlatforms(manifest: Manifest): string[] {
   return PLATFORM_VALUES.filter((platform) => Array.isArray(manifest[platform]));
+}
+
+// The one platform a manifest targets, when it targets exactly one — otherwise undefined.
+// Skills are composed for a single platform, so an existing app's manifest can answer
+// "which platform is this?" for us only in the unambiguous case; `peek apps link` and
+// `peek init --app` ask the developer for the rest.
+export function solePlatform(manifest: Manifest): string | undefined {
+  const platforms = manifestPlatforms(manifest);
+  return platforms.length === 1 ? platforms[0] : undefined;
 }

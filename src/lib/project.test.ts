@@ -12,6 +12,7 @@ import {
   slugify,
   updateProject,
   writeKitMetadata,
+  writeLinkMetadata,
 } from "./project.js";
 
 // openProject narrates what it migrated through clack; nothing here asserts on that output.
@@ -48,6 +49,28 @@ describe("the project file", () => {
     expect(project.app).toEqual({ id: "waiver-wizard", testId: "waiver-wizard-test-dev" });
     expect(project.starterKit).toBe("nextjs-starter-kit");
     expect(project.platform).toBe("peek");
+  });
+
+  it("records a linked directory without claiming a starter kit", () => {
+    writeLinkMetadata(cwd, "my-existing-app", { platform: "peek", stack: "javascript" });
+
+    const project = readProject(cwd);
+    expect(project.app).toEqual({ id: "my-existing-app" });
+    expect(project.platform).toBe("peek");
+    expect(project.linkedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Nothing scaffolded this directory, so there is no kit and no creation date to claim.
+    expect(project.starterKit).toBeUndefined();
+    expect(project.createdAt).toBeUndefined();
+  });
+
+  it("keeps the axes a linked project already knew when they aren't given again", () => {
+    writeLinkMetadata(cwd, "my-existing-app", { platform: "peek", stack: "javascript" });
+    writeLinkMetadata(cwd, "other-app");
+
+    const project = readProject(cwd);
+    expect(project.app).toEqual({ id: "other-app" });
+    expect(project.platform).toBe("peek");
+    expect(project.stack).toBe("javascript");
   });
 
   it("treats a mangled file as absent rather than failing the dev loop", () => {

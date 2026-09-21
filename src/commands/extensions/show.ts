@@ -1,7 +1,6 @@
 import { Args, Flags } from "@oclif/core";
 import * as p from "@clack/prompts";
 import { BaseCommand } from "../../base-command.js";
-import { CLIError } from "../../errors.js";
 import { ensureLoggedIn } from "../../lib/auth.js";
 import {
   buildFieldTree,
@@ -11,7 +10,6 @@ import {
   showExtension,
 } from "../../lib/extensions.js";
 import { confirmRegistryOverride } from "../../lib/registry.js";
-import { failure } from "../../lib/ui.js";
 
 // Bullet per nesting depth; the last one repeats for anything deeper.
 const BULLETS = ["•", "◦", "–"];
@@ -67,7 +65,7 @@ export default class ExtensionsShow extends BaseCommand {
     await confirmRegistryOverride();
     await ensureLoggedIn();
 
-    try {
+    await this.guard(async () => {
       const ext = await showExtension(args.slug, flags.debug);
 
       if (flags.json) {
@@ -93,12 +91,6 @@ export default class ExtensionsShow extends BaseCommand {
 
       p.note(lines.join("\n"), ext.slug);
       p.outro("Done.");
-    } catch (error) {
-      if (error instanceof CLIError) {
-        failure(error.message, error.suggestion);
-        this.exit(1);
-      }
-      throw error;
-    }
+    });
   }
 }

@@ -82,6 +82,23 @@ export function skipEnvConfirmForSession(): void {
 // touches the registry many times and re-prompting each hop is noise.
 let overrideConfirmed = false;
 
+// clack always writes to stdout, which a --json command can't have: its stdout is parsed.
+// Such a command declares itself here and the override warning goes to stderr as plain
+// text instead — still impossible to miss, still out of the way of the pipe.
+let warnOnStderr = false;
+
+export function warnOnStderrForSession(): void {
+  warnOnStderr = true;
+}
+
+function warn(message: string): void {
+  if (warnOnStderr) {
+    process.stderr.write(`${message}\n`);
+    return;
+  }
+  p.log.warn(message);
+}
+
 // Gate before any registry network call. Registry devs override the URL to point
 // at a local/staging backend during auth-flow development — this keeps them from
 // forgetting they're not talking to prod mid-session.
@@ -95,14 +112,12 @@ export async function confirmRegistryOverride(): Promise<void> {
   // proceed without prompting on every registry hop. Still surface the warning so it's never
   // invisible that we're pointed off production.
   if (sessionSkipConfirm) {
-    p.log.warn(`Registry overridden: ${url} (auto-confirmed via --skip-env-confirm). This is NOT production.`);
+    warn(`Registry overridden: ${url} (auto-confirmed via --skip-env-confirm). This is NOT production.`);
     overrideConfirmed = true;
     return;
   }
 
-  p.log.warn(
-    `Registry overridden: ${url}\nThis is NOT production. Run "peek set-env --clear" to reset.`,
-  );
+  warn(`Registry overridden: ${url}\nThis is NOT production. Run "peek env set --clear" to reset.`);
 
   const proceed = await p.confirm({ message: "Continue against this registry?", initialValue: false });
 

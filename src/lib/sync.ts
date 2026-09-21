@@ -9,6 +9,8 @@ import { getAccessToken } from "./session.js";
 // The registry client. Everything the CLI needs from the publisher API lives here, and the
 // shape of that API is worth stating once:
 //
+//   GET  /apps                    every app this account can publish to
+//   GET  /apps/:app_id            one app, or a 404 if no app has that slug
 //   POST /apps/:app_id/upsert     write a manifest onto a slug, creating the app if new
 //   PUT  /apps/:app_id/base-url   set the origin relative extendable URLs resolve against
 //   GET  /apps/:app_id/export     the bare manifest back out again (lossless round trip)
@@ -111,6 +113,75 @@ function requestError(status: number, body: string): CLIError {
 // Endpoints
 // ---------------------------------------------------------------------------------------
 
+// An app as the registry's app endpoints describe it: a slug, whether it's a test app (and
+// of what), plus the shared secret when the caller is entitled to see it. There is
+// deliberately no name/description here — that copy is per-platform listing content,
+// written in the portal, and the publisher API does not carry it.
+export interface RegistryApp {
+  appId: string;
+  sharedSecret?: string;
+  // A test app is a clone `peek dev` made off a source app. It shares the source's listing,
+  // lives at a derived slug, and is NOT something a directory should publish to — you push
+  // at it (`--test`), you don't build on it.
+  isTestApp: boolean;
+  // The slug of the app this one clones, when it's a test app. The registry sends the slug
+  // rather than an id because the id is internal.
+  testAppFor?: string;
+}
+
+interface AppBody {
+  id?: string;
+  shared_secret_key?: string;
+  is_test_app?: boolean;
+  test_app_for?: string | null;
+}
+
+function registryApp(body: AppBody): RegistryApp {
+  return {
+    appId: body.id ?? "",
+    sharedSecret: body.shared_secret_key ?? undefined,
+    // A registry older than the change that added these fields sends neither, and every app
+    // then reads as an ordinary one — the same flat list the CLI showed before.
+    isTestApp: body.is_test_app === true,
+    testAppFor: body.test_app_for ?? undefined,
+  };
+}
+
+// Every app this account can publish to (the registry scopes the list to the caller's
+// organization). `search` is passed through to the registry's own slug filter.
+//
+// This is how a developer finds the slug to link a directory to: the manifest doesn't name
+// an app, so without a listing the only way to learn an existing app's slug is the portal.
+// Hence `excludeTestApps` — anything a human picks an app FROM wants the clones gone.
+export async function listApps(
+  options: { search?: string; excludeTestApps?: boolean; debug?: boolean } = {},
+): Promise<RegistryApp[]> {
+  const params = new URLSearchParams();
+  if (options.search) params.set("search", options.search);
+  if (options.excludeTestApps) params.set("exclude-test-apps", "true");
+
+  const query = params.size > 0 ? `?${params}` : "";
+  const { body } = await request({ method: "GET", path: `/apps${query}`, debug: options.debug });
+  return (parse<{ data?: AppBody[] }>(body).data ?? [])
+    .map(registryApp)
+    .filter((app) => app.appId.length > 0);
+}
+
+// One app by slug, or null when nothing the account can see has that slug (a 404). Null
+// rather than a throw because the callers — `peek apps link`, `peek init --app` — need to tell
+// "that app isn't yours / doesn't exist" (which has a good suggestion) apart from a
+// transport failure (which doesn't).
+export async function findApp(appId: string, debug = false): Promise<RegistryApp | null> {
+  const { status, body } = await request({
+    method: "GET",
+    path: `/apps/${encodeURIComponent(appId)}`,
+    debug,
+    tolerate: 404,
+  });
+  if (status === 404) return null;
+  return registryApp(parse<{ data?: AppBody }>(body).data ?? {});
+}
+
 export interface UpsertResult {
   // created | updated | published | no_change
   action: string;
@@ -184,18 +255,39 @@ export async function upsertManifest(options: UpsertOptions): Promise<UpsertResu
   return upsertResult(response.body);
 }
 
+function exportPath(appId: string, draft?: boolean): string {
+  return `/apps/${encodeURIComponent(appId)}/export${draft ? "?include-draft=true" : ""}`;
+}
+
 // The manifest the registry holds. Defaults to the published version — the draft is what
 // you get with `draft: true`, which is what a pull right after a push wants.
 export async function exportManifest(
   appId: string,
   options: { draft?: boolean; debug?: boolean } = {},
 ): Promise<Manifest> {
-  const query = options.draft ? "?include-draft=true" : "";
   const { body } = await request({
     method: "GET",
-    path: `/apps/${encodeURIComponent(appId)}/export${query}`,
+    path: exportPath(appId, options.draft),
     debug: options.debug,
   });
+  return parse<Manifest>(body);
+}
+
+// The same export, but null instead of an error when the app has no version to export (the
+// registry answers 422). That is a real state, not a failure: an app created in the portal,
+// or one whose only version was deleted, has a slug and nothing else. `peek apps link` and
+// `peek init --app` fall back to a starter manifest in that case rather than dying.
+export async function tryExportManifest(
+  appId: string,
+  options: { draft?: boolean; debug?: boolean } = {},
+): Promise<Manifest | null> {
+  const { status, body } = await request({
+    method: "GET",
+    path: exportPath(appId, options.draft),
+    debug: options.debug,
+    tolerate: 422,
+  });
+  if (status === 422) return null;
   return parse<Manifest>(body);
 }
 
@@ -220,20 +312,49 @@ export interface TestAppResult {
   sharedSecret?: string;
 }
 
+// The identifier every test app gets unless the developer names their own. It is what makes
+// the dev loop idempotent — the same identifier is the same test app, run after run — and
+// what makes it SHARED: a team all running `peek dev` land on `<app>-test-dev` together, and
+// whoever ran last owns its base_url. `--test <identifier>` is how one developer gets their
+// own (`<app>-test-greg`).
+export const DEFAULT_TEST_IDENTIFIER = "dev";
+
+// Validate a `--test <identifier>` before it reaches the registry. The registry slugifies
+// the identifier and silently falls back to "dev" when nothing survives, which would hand
+// the developer the shared test app they were trying to avoid — so an identifier with no
+// usable characters is an error here instead.
+export function checkTestIdentifier(input: string): string {
+  const identifier = input.trim();
+  if (!/[a-z0-9]/i.test(identifier)) {
+    throw new CLIError(
+      `"${input}" can't name a test app.`,
+      "Use letters and numbers, e.g. --test greg or --test pr-421.",
+    );
+  }
+  return identifier;
+}
+
 // Create (or hand back) the test app cloned from a source app. Idempotent per identifier,
 // so the dev loop can call it every run and get the same environment.
+//
+// The registry derives the slug as `<source>-test-<identifier>` and slugifies the
+// identifier itself, so what comes back is authoritative — callers should report
+// `testAppId` rather than predict it.
 //
 // `baseUrl` matters only on the run that creates it: a test app goes out PUBLISHED so it can
 // be installed straight away, and a published version whose extendable URLs are relative
 // needs its origin in the same breath. Later runs move it with setBaseUrl.
 export async function createTestApp(
   sourceAppId: string,
-  options: { baseUrl?: string; debug?: boolean } = {},
+  options: { identifier?: string; baseUrl?: string; debug?: boolean } = {},
 ): Promise<TestAppResult> {
   const { body } = await request({
     method: "POST",
     path: `/apps/${encodeURIComponent(sourceAppId)}/test-apps`,
-    body: { identifier: "dev", base_url: options.baseUrl },
+    body: {
+      identifier: options.identifier ?? DEFAULT_TEST_IDENTIFIER,
+      base_url: options.baseUrl,
+    },
     debug: options.debug,
   });
 
@@ -319,7 +440,7 @@ export async function publishDraft(appId: string, debug = false): Promise<AppVer
     if (!published) {
       throw new CLIError(
         `${appId} has no version to publish.`,
-        "Push a manifest first with `peek sync-app`.",
+        "Push a manifest first with `peek apps sync`.",
       );
     }
     return published;
@@ -329,23 +450,33 @@ export async function publishDraft(appId: string, debug = false): Promise<AppVer
 }
 
 // ---------------------------------------------------------------------------------------
-// `peek sync-app` — the manual push/pull of a manifest file
+// `peek apps push` / `peek apps pull` — the manual moves of a manifest file
 // ---------------------------------------------------------------------------------------
 
-export interface SyncOptions {
+// The two directions were one command (`sync-app`, with a --pull flag) and are now two, so
+// each one's flags describe only what it does: a push has --no-publish, a pull has --draft.
+// Both share the same target-app resolution and the same "here's what's about to happen,
+// continue?" gate.
+
+interface ManifestMoveOptions {
   file: string;
   appId: string;
-  autoPublish: boolean;
-  pull: boolean;
-  // Pull the draft instead of the published version.
-  draft?: boolean;
   debug: boolean;
   // Skip the interactive "Continue?" confirm — used by `peek init`, which registers
   // a freshly-scaffolded app non-interactively. The prod-publish confirm still prompts.
   assumeYes?: boolean;
 }
 
-export interface SyncResult {
+export interface PushOptions extends ManifestMoveOptions {
+  autoPublish: boolean;
+}
+
+export interface PullOptions extends ManifestMoveOptions {
+  // Pull the draft instead of the published version.
+  draft?: boolean;
+}
+
+export interface PushResult {
   appId: string;
   action?: string;
   // Present only when the registry minted a new secret this run — it's returned once and
@@ -371,7 +502,8 @@ async function fileHasLocalChanges(file: string): Promise<boolean> {
   return false;
 }
 
-async function pull(options: SyncOptions): Promise<void> {
+// Overwrite the local manifest with the registry's copy.
+export async function pullManifest(options: PullOptions): Promise<void> {
   const dirty = await fileHasLocalChanges(options.file);
   const what = options.draft ? "draft" : "published version";
 
@@ -401,7 +533,10 @@ async function pull(options: SyncOptions): Promise<void> {
   p.log.success(`Updated ${options.file} from registry`);
 }
 
-function announceSecret(secret: string): void {
+// The registry mints an app's shared secret once, in the response that created it, and
+// never shows it again. Every flow that can create an app has to shout it, so the text
+// lives here rather than in each command.
+export function announceSharedSecret(secret: string): void {
   p.log.warn(
     [
       "IMPORTANT: A new shared secret key was generated!",
@@ -416,7 +551,8 @@ function announceSecret(secret: string): void {
   );
 }
 
-async function push(options: SyncOptions): Promise<SyncResult> {
+// Write the local manifest onto the app, creating it if the slug is free.
+export async function pushManifest(options: PushOptions): Promise<PushResult> {
   const { manifest, converted } = loadManifest(options.file);
 
   // An out-of-date manifest (legacy envelope, or the old "registry" key) is converted in
@@ -429,7 +565,7 @@ async function push(options: SyncOptions): Promise<SyncResult> {
 
   p.log.info(
     [
-      "Ready to sync:",
+      "Ready to push:",
       `  File: ${options.file}`,
       `  App: ${options.appId}`,
       `  Registry: ${getRegistryApiUrl()}`,
@@ -453,7 +589,7 @@ async function push(options: SyncOptions): Promise<SyncResult> {
   // sync-app`, where the developer must persist the secret themselves. In the assumeYes
   // flows (init/dev) the caller saves it to .env.local and prints its own concise note — so
   // skip it here to avoid the mixed message.
-  if (result.sharedSecret && !options.assumeYes) announceSecret(result.sharedSecret);
+  if (result.sharedSecret && !options.assumeYes) announceSharedSecret(result.sharedSecret);
 
   // Write the registry's canonical manifest back to disk, so the file and the registry
   // agree byte for byte after a push.
@@ -462,15 +598,4 @@ async function push(options: SyncOptions): Promise<SyncResult> {
   p.log.success(`Complete: action ${result.action}`);
 
   return { appId: options.appId, action: result.action, sharedSecret: result.sharedSecret };
-}
-
-export async function syncApp(options: SyncOptions): Promise<SyncResult> {
-  if (options.debug) p.log.info(`App: ${options.appId}`);
-
-  if (options.pull) {
-    await pull(options);
-    return { appId: options.appId };
-  }
-
-  return push(options);
 }

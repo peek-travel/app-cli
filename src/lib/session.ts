@@ -12,7 +12,7 @@ export interface TokenSet {
 }
 
 // session.json holds one TokenSet PER registry, keyed by registry URL. Credentials are scoped
-// to their env: pointing the CLI at another registry (`peek set-env`) never sends this env's
+// to their env: pointing the CLI at another registry (`peek env set`) never sends this env's
 // token there, and switching back doesn't require logging in again.
 type SessionStore = Record<string, TokenSet>;
 

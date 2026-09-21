@@ -1,6 +1,6 @@
 {
   "name": "@peektravel/app-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI for scaffolding, developing, and publishing Peek apps",
   "license": "MIT",
   "author": "Peek Travel, Inc.",
@@ -40,13 +40,29 @@
       "@oclif/plugin-warn-if-update-available"
     ],
     "topicSeparator": " ",
+    "topics": {
+      "apps": {
+        "description": "Your apps in the registry: list them, link this directory to one, push/pull the manifest, set the base URL"
+      },
+      "auth": {
+        "description": "Sign in to / out of the Peek app registry"
+      },
+      "extensions": {
+        "description": "Inspect the extensions (extendables) an app can declare in its manifest"
+      },
+      "env": {
+        "description": "Which registry the CLI talks to (registry developers only)",
+        "hidden": true
+      }
+    },
     "warn-if-update-available": {
       "timeoutInDays": 1,
       "message": "<%= config.name %> update available: <%= chalk.greenBright(latest) %> (current <%= chalk.dim(config.version) %>). Run <%= chalk.cyan('npm i -g ' + config.pjson.name) %> to update."
     }
   },
   "scripts": {
-    "build": "tsc -b",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
+    "build": "pnpm run clean && tsc -b",
     "dev": "./bin/dev.js",
     "test": "vitest run",
     "prepack": "pnpm run build",
