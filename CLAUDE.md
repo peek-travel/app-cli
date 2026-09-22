@@ -97,6 +97,28 @@ scaffolded app. `global/app-builder` is the orchestrator; the rest are its sibli
 > cross-links (`app-builder`, `manifest-and-deploy` incl. the three platform ones, `webhooks`,
 > `backoffice-data`) still hold. A stale `cli` skill silently teaches agents the wrong CLI.
 
+## Versioning — every PR bumps `package.json`
+
+**A PR that changes shipped behavior bumps the root `package.json` `version` in the same PR**, by
+semver, as part of the change — not in a follow-up `chore: bump` commit. `@peektravel/app-cli` is
+published from this repo and developers install it globally; the version is how they (and a bug
+report) say which CLI they're on, so a merged change with no bump is a released behavior change
+nobody can name.
+
+What counts as which bump — remember that `src/skills/**` and `templates/nextjs-starter-kit/**`
+ship inside the package (`files`), so a change to the starter kit or a skill is a released change
+like any other:
+
+- **major** — a breaking change for someone already using the CLI: a command or flag removed or
+  renamed without an alias, a change to `app.json` / `.peek-kit.json` that an existing project
+  can't read, a starter-kit change an existing scaffolded app can't take.
+- **minor** — new capability, backward compatible: a new command or flag, a new skill, a starter
+  kit that can do something it couldn't.
+- **patch** — everything else that ships: bug fixes, a dependency bump inside the starter kit,
+  rewording a skill, a doc/recipe correction.
+
+Repo-only changes that don't land in the published package (tests, this file, CI) don't need one.
+
 ## Build & test
 
 - Build/typecheck: `tsc -b` (run the local binary directly if the sandbox blocks `pnpm run`).
