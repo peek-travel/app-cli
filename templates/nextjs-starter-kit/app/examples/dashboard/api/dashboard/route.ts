@@ -13,13 +13,13 @@ export const GET = withPeekAuthentication(
     weekStart.setUTCDate(weekStart.getUTCDate() - 7);
 
     const [products, todayBookings, weekBookings] = await Promise.all([
-      peek.getAllProducts(),
-      peek.searchBookingsByTimeRange({
+      peek.getProductService().getAllProducts(),
+      peek.getBookingService().searchByTimeRange({
         start: todayStart.toISOString(),
         end: tomorrowStart.toISOString(),
         searchBy: "activityDate",
       }),
-      peek.searchBookingsByTimeRange({
+      peek.getBookingService().searchByTimeRange({
         start: weekStart.toISOString(),
         end: now.toISOString(),
         searchBy: "purchaseDate",

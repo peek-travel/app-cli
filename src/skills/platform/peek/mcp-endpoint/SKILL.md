@@ -94,7 +94,7 @@ export const MCP_TOOLS = [
     description: 'List the bookable activities/products in this Peek Pro account.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async (_args: unknown, peek: PeekAccessService) =>
-      peek.getAllActivities(), // the SAME call the UI's /api/activities route makes
+      peek.getProductService().getAllActivities(), // the SAME call the UI's /api/activities route makes
   },
   // ...one entry per exposed capability
 ] as const;
@@ -114,9 +114,9 @@ reader that only has the description) is generic — **it lives in `mcp-endpoint
 Derive the candidate tools from *this* app's key jobs and the UI actions you're building. A
 concrete Peek example, for a read-oriented app:
 
-- `list_activities` → `peek.getAllActivities()` (read, safe default)
-- `search_bookings` → `peek.searchBookingsByTimeRange({ start, end, searchBy })` (read)
-- a write like `assign_guide` → `peek.assignTimeslotGuide(...)` (mutates Peek — gate it; confirm
+- `list_activities` → `peek.getProductService().getAllActivities()` (read, safe default)
+- `search_bookings` → `peek.getBookingService().searchByTimeRange({ start, end, searchBy })` (read)
+- a write like `assign_guide` → `peek.getTimeslotService().assignGuide(...)` (mutates Peek — gate it; confirm
   the user wants the AI to do it unattended)
 
 Normalize IDs on input (`B-123ABC` → `b_123abc`) and state units/formats in the description — see

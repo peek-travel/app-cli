@@ -75,7 +75,8 @@ export const MCP_TOOLS = [
     name: "list_activities",
     description: "List the bookable activities in this Connect&GO account.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    handler: async (_args: unknown, cng: CngAccessService) => cng.getAllActivities(),
+    handler: async (_args: unknown, cng: CngAccessService) =>
+      cng.getProductService().getAllActivities(),
   },
 ] as const;
 
@@ -95,7 +96,7 @@ is generic — it lives in `mcp-endpoint`; follow it there.
 The cng-specific reality: **cng's typed SDK is small today and is a hard ceiling** — the typed
 client is the only supported way in (there is no direct-API escape hatch — see `cng-backoffice-api`),
 so you can only expose what it actually offers. Right now that's essentially `list_activities` →
-`cng.getAllActivities()` (a read,
+`cng.getProductService().getAllActivities()` (a read,
 the safe default). As the cng SDK grows, add one tool per new capability, mirroring the UI actions
 you build. Present the proposed list to the user and get sign-off before implementing.
 

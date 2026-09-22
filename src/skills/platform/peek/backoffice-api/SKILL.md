@@ -30,7 +30,7 @@ authenticated `PeekAccessService` (see `peek-embed-and-auth`).
 // app/examples/peek-pro/main/api/<thing>/route.ts
 export const GET = withAppAuthentication<PeekAccessService>(
   async (_request: NextRequest, peek: PeekAccessService) => {
-    const products = await peek.getAllActivities();
+    const products = await peek.getProductService().getAllActivities();
     return NextResponse.json({ activities: products });
   },
 );
@@ -48,21 +48,38 @@ current version, enumerating the client's methods) is a stack concern — see
 > installed types before calling it; don't rely on the examples below as the limit or on model
 > memory. `TODO(verify)` anything the types/docs don't pin.
 
+### Go through the resource service, not the flat method
+
+`PeekAccessService` is an **accessor for resource services** — `getProductService()`,
+`getBookingService()`, `getTimeslotService()`, `getAccountUserService()`, `getPricingService()`,
+and the rest (the installed types list them all). Call the method on the service:
+
+```ts
+await peek.getProductService().getAllActivities();
+```
+
+The flat convenience methods that used to sit directly on `peek` (`peek.getAllActivities()`,
+`peek.searchBookingsByTimeRange(...)`, …) still delegate and still work, but they are
+**`@deprecated` as of `@peektravel/app-utilities` 0.9.0** — write new code against the resource
+services, and move flat calls over when you touch them.
+
 ### Methods confirmed in use by this starter kit
 
 Concrete examples from the shipped routes (`app/examples/peek-pro/main/api/` and
 `app/examples/dashboard/api/`) — a **starting point, not the limit**:
 
-- `peek.getAllActivities()` → activity products (`{ productId, name, color, … }`).
-- `peek.getAllProducts()` → all products; filter out add-ons with the exported
+- `peek.getProductService().getAllActivities()` → activity products
+  (`{ productId, name, color, … }`).
+- `peek.getProductService().getAllProducts()` → all products; filter out add-ons with the exported
   `ADD_ON_PRODUCT_TYPE` constant (`products.filter(p => p.type !== ADD_ON_PRODUCT_TYPE)`).
-- `peek.searchBookingsByTimeRange({ start, end, searchBy })` — `start`/`end` are ISO strings;
-  `searchBy` is `"activityDate"` or `"purchaseDate"`. Bookings expose fields like `isCanceled`
-  and `valueAmount` (a string — `parseFloat` it for math).
-- `peek.getAllAccountUsers()` → account staff (with nested fields like
+- `peek.getBookingService().searchByTimeRange({ start, end, searchBy })` — `start`/`end` are ISO
+  strings; `searchBy` is `"activityDate"` or `"purchaseDate"`. Bookings expose fields like
+  `isCanceled` and `valueAmount` (a string — `parseFloat` it for math).
+- `peek.getAccountUserService().getAll()` → account staff (with nested fields like
   `assignedResources[].accountUserId`).
-- `peek.getTimeslotsForDay(...)` → the day's timeslots (see the wall-clock hazard below).
-- `peek.assignTimeslotGuide(...)` → assign a guide/resource to a timeslot.
+- `peek.getTimeslotService().getForDay(...)` → the day's timeslots (see the wall-clock hazard
+  below).
+- `peek.getTimeslotService().assignGuide(...)` → assign a guide/resource to a timeslot.
 
 ## The Peek capability boundary — raw GraphQL is a flagged last resort
 

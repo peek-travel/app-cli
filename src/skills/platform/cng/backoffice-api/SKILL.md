@@ -31,7 +31,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 
 export const GET = withAppAuthentication<CngAccessService>(
   async (_request: NextRequest, cng: CngAccessService) => {
-    const activities = await cng.getAllActivities();
+    const activities = await cng.getProductService().getAllActivities();
     return NextResponse.json({ activities });
   },
 );
@@ -54,8 +54,10 @@ This skill states the *capability boundary* and the data rules.
 cng's typed surface is **small today** — the shipped route (`app/examples/cng/main/api/activities`)
 uses exactly one method:
 
-- `cng.getAllActivities()` → a flat list of `Activity` (`{ productId, name, type, color, tickets }`).
-  Internally this delegates to `cng.getProductService().getAllActivities()`.
+- `cng.getProductService().getAllActivities()` → a flat list of `Activity`
+  (`{ productId, name, type, color, tickets }`). Go through the resource service: the flat
+  `cng.getAllActivities()` still delegates to it, but is **`@deprecated` as of
+  `@peektravel/app-utilities` 0.9.0**.
 
 Treat this as a **starting point that will grow**, not the ceiling of what cng *could* expose — but
 also not proof that anything else exists yet. Read the installed `.d.ts` to see the real current

@@ -111,13 +111,15 @@ These are the details that bite. Read the live doc for the full worked examples;
   `activityContexts` Peek stored — persist them if you want an audit trail of exactly what Peek
   accepted.
 
-## Methods (short-forms exist on `PeekAccessService`)
+## Methods (go through `getPricingService()`)
 
-`getPricingService()` exposes `createEngine`, `updateEngine`, `deleteEngine`, `upsertOverrides`,
-`clearOverrides`. The same behavior is available one accessor call shorter directly on the client:
-`peek.createPricingEngine(...)`, `updatePricingEngine`, `deletePricingEngine`,
-`upsertPricingOverrides`, `clearPricingOverrides`. **Confirm exact signatures and the
-`UpsertOverridesInput` shape in the installed types** — don't rely on the summary here.
+`peek.getPricingService()` exposes `createEngine`, `updateEngine`, `deleteEngine`,
+`upsertOverrides`, `clearOverrides`. The one-call-shorter flat forms on the client
+(`peek.createPricingEngine(...)`, `updatePricingEngine`, `deletePricingEngine`,
+`upsertPricingOverrides`, `clearPricingOverrides`) still delegate to the same behavior, but are
+**`@deprecated` as of `@peektravel/app-utilities` 0.9.0** — write new code against the service.
+**Confirm exact signatures and the `UpsertOverridesInput` shape in the installed types** — don't
+rely on the summary here.
 
 ## Errors — branch with `instanceof`
 
@@ -133,8 +135,9 @@ These are the details that bite. Read the live doc for the full worked examples;
 ## Related skills
 
 - **`peek-backoffice-api`** — the concrete Peek client this rides on (`PeekAccessService`), how the
-  authenticated `peek` instance is built, product/ticket lookup (`getAllActivities`,
-  `tickets[].id`, `currency`), ID normalization, and PII rules.
+  authenticated `peek` instance is built, product/ticket lookup
+  (`getProductService().getAllActivities()`, `tickets[].id`, `currency`), ID normalization, and
+  PII rules.
 - **`javascript-app-utilities`** — *how* to introspect the installed `@peektravel/app-utilities`
   package (types + `docs/`) to confirm the pricing method signatures and `UpsertOverridesInput`.
 - **`peek-manifest-and-deploy`** — the `peek_backoffice_api@v1` extendable that grants this access

@@ -77,7 +77,8 @@ and `docs/`, mark it **`TODO(verify)`**, check the live doc, and/or ask the user
 
 So this skill owns the **method** — introspect the installed package for the selected platform —
 while each platform's `*-backoffice-api` skill owns that platform's **capabilities**. `peek` is the
-canonical example (`PeekAccessService`, `getAllActivities()`, GraphQL as a flagged last resort);
+canonical example (`PeekAccessService`, `getProductService().getAllActivities()`, GraphQL as a
+flagged last resort);
 don't assume its surface holds on cng/acme.
 
 ## Node-only: the API clients require the Node runtime

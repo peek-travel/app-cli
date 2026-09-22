@@ -7,15 +7,18 @@ vi.mock("@/lib/with-app", () => ({
     (request: NextRequest) => handler(request, fakeCng),
 }));
 
-const fakeCng = {
+const fakeProductService = {
   getAllActivities: vi.fn(),
+};
+const fakeCng = {
+  getProductService: () => fakeProductService,
 };
 
 const { GET } = await import("../route");
 
 describe("GET /api/activities", () => {
   it("maps productId to id for each activity", async () => {
-    fakeCng.getAllActivities.mockResolvedValue([
+    fakeProductService.getAllActivities.mockResolvedValue([
       { productId: "prod-1", name: "Kayaking", color: "#0f0", type: "ACTIVITY" },
       { productId: "prod-2", name: "Hiking", color: "", type: "ACTIVITY" },
     ]);
@@ -32,7 +35,7 @@ describe("GET /api/activities", () => {
   });
 
   it("answers a missing-permission rejection with 403 and the named permissions", async () => {
-    fakeCng.getAllActivities.mockRejectedValue(
+    fakeProductService.getAllActivities.mockRejectedValue(
       new CngPermissionError(["products:read"], { message: "Forbidden" }),
     );
 
@@ -47,7 +50,7 @@ describe("GET /api/activities", () => {
   });
 
   it("re-throws any other failure", async () => {
-    fakeCng.getAllActivities.mockRejectedValue(new Error("boom"));
+    fakeProductService.getAllActivities.mockRejectedValue(new Error("boom"));
 
     await expect(
       GET(new NextRequest("http://localhost/api/activities")),

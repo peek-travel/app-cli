@@ -8,7 +8,7 @@ export const GET = withPeekAuthentication(
     const weekStart = new Date(now);
     weekStart.setUTCDate(weekStart.getUTCDate() - 7);
 
-    const bookings = await peek.searchBookingsByTimeRange({
+    const bookings = await peek.getBookingService().searchByTimeRange({
       start: weekStart.toISOString(),
       end: now.toISOString(),
       searchBy: "purchaseDate",

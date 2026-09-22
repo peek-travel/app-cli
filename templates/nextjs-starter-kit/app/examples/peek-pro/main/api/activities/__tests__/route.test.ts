@@ -6,15 +6,18 @@ vi.mock("@/lib/with-app", () => ({
     (request: NextRequest) => handler(request, fakePeek),
 }));
 
-const fakePeek = {
+const fakeProductService = {
   getAllActivities: vi.fn(),
+};
+const fakePeek = {
+  getProductService: () => fakeProductService,
 };
 
 const { GET } = await import("../route");
 
 describe("GET /api/activities", () => {
   it("maps productId to id for each activity", async () => {
-    fakePeek.getAllActivities.mockResolvedValue([
+    fakeProductService.getAllActivities.mockResolvedValue([
       { productId: "prod-1", name: "Kayaking", color: "#0f0", type: "activity" },
       { productId: "prod-2", name: "Hiking", color: "", type: "activity" },
     ]);

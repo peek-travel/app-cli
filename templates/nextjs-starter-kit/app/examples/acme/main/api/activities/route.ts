@@ -6,7 +6,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 // AcmeAccessService — name it and skip any runtime narrowing.
 export const GET = withAppAuthentication<AcmeAccessService>(
   async (_request: NextRequest, acme: AcmeAccessService) => {
-    const products = await acme.getAllActivities();
+    const products = await acme.getProductService().getAllActivities();
     const activities = products.map(({ productId, name, color }) => ({
       id: productId,
       name,

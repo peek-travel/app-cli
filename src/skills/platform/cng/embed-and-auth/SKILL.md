@@ -175,7 +175,7 @@ you the verified, install-scoped `cng` client. Never read or decode the token yo
 ```ts
 export const GET = withAppAuthentication<CngAccessService>(
   async (_request: NextRequest, cng: CngAccessService) => {
-    const activities = await cng.getAllActivities(); // SDK surface → cng-backoffice-api
+    const activities = await cng.getProductService().getAllActivities(); // SDK surface → cng-backoffice-api
     return NextResponse.json({ activities });
   },
 );

@@ -75,7 +75,8 @@ export const MCP_TOOLS = [
     name: "list_activities",
     description: "List the bookable activities (published event templates) in this ACME account.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    handler: async (_args: unknown, acme: AcmeAccessService) => acme.getAllActivities(),
+    handler: async (_args: unknown, acme: AcmeAccessService) =>
+      acme.getProductService().getAllActivities(),
   },
 ] as const;
 
@@ -95,7 +96,8 @@ is generic — it lives in `mcp-endpoint`; follow it there.
 The ACME-specific reality: **ACME's typed SDK is small today and is a hard ceiling** — the typed
 client is the only supported way in, so you can expose **only** what it actually offers (there is no
 direct-API escape hatch — see `acme-backoffice-api`). Right now that's essentially `list_activities`
-→ `acme.getAllActivities()` (a read, the safe default). As the ACME SDK grows, add one tool per new
+→ `acme.getProductService().getAllActivities()` (a read, the safe default). As the ACME SDK grows,
+add one tool per new
 capability, mirroring the UI actions you build. Present the proposed list to the user and get
 sign-off before implementing.
 

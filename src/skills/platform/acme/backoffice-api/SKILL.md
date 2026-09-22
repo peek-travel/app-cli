@@ -31,7 +31,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 
 export const GET = withAppAuthentication<AcmeAccessService>(
   async (_request: NextRequest, acme: AcmeAccessService) => {
-    const activities = await acme.getAllActivities();
+    const activities = await acme.getProductService().getAllActivities();
     return NextResponse.json({ activities });
   },
 );
@@ -54,9 +54,10 @@ current version, enumerating the client's methods) is a stack concern — see
 ACME's typed surface is **small today** — the shipped route
 (`app/examples/acme/main/api/activities`) uses exactly one method:
 
-- `acme.getAllActivities()` → a flat list of `AcmeActivity`
-  (`{ productId, name, type, color, tickets }`). Internally this delegates to
-  `acme.getProductService().getAllActivities()`.
+- `acme.getProductService().getAllActivities()` → a flat list of `AcmeActivity`
+  (`{ productId, name, type, color, tickets }`). Go through the resource service: the flat
+  `acme.getAllActivities()` still delegates to it, but is **`@deprecated` as of
+  `@peektravel/app-utilities` 0.9.0**.
 
 Treat this as a **starting point that will grow**, not the ceiling of what ACME *could* expose —
 but also not proof that anything else exists yet. Read the installed `.d.ts` for the real current
@@ -81,7 +82,7 @@ All server-side (Node) interaction with ACME goes through `@peektravel/app-utili
 
 ## What an ACME "activity" actually is — published event templates, no tickets
 
-ACME's `getAllActivities()` reads the **event-templates** endpoint (`v2/b2b/event/templates/names`)
+ACME's `getProductService().getAllActivities()` reads the **event-templates** endpoint (`v2/b2b/event/templates/names`)
 and returns each as an `AcmeActivity`. Two ACME-specific facts about the shape:
 
 - **Only *published* templates are surfaced.** The converter filters to `reviewState ===
