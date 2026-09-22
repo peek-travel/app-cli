@@ -10,7 +10,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 export const GET = withAppAuthentication<CngAccessService>(
   async (_request: NextRequest, cng: CngAccessService) => {
     try {
-      const products = await cng.getAllActivities();
+      const products = await cng.getProductService().getAllActivities();
       const activities = products.map(({ productId, name, color }) => ({
         id: productId,
         name,

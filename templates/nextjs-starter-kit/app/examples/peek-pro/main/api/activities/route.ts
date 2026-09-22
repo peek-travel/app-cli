@@ -6,7 +6,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 // PeekAccessService — name it and skip any runtime narrowing.
 export const GET = withAppAuthentication<PeekAccessService>(
   async (_request: NextRequest, peek: PeekAccessService) => {
-    const products = await peek.getAllActivities();
+    const products = await peek.getProductService().getAllActivities();
     const activities = products.map(({ productId, name, color }) => ({
       id: productId,
       name,

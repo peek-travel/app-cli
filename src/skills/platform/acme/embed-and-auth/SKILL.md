@@ -175,7 +175,7 @@ you the verified, install-scoped `acme` client. Never read or decode the token y
 ```ts
 export const GET = withAppAuthentication<AcmeAccessService>(
   async (_request: NextRequest, acme: AcmeAccessService) => {
-    const activities = await acme.getAllActivities(); // SDK surface → acme-backoffice-api
+    const activities = await acme.getProductService().getAllActivities(); // SDK surface → acme-backoffice-api
     return NextResponse.json({ activities });
   },
 );

@@ -174,7 +174,7 @@ Or skip the platform `switch` entirely with the SDK factory:
 // e.g. a public route / cron job — no x-peek-auth header, no token gate
 const install = await installs.get(installId);   // { installId, apiUrl, platform, … } from YOUR store
 const peek = createPeekServiceForInstall(install.installId, install.apiUrl);
-const activities = await peek.getAllActivities();
+const activities = await peek.getProductService().getAllActivities();
 ```
 
 **Endpoint = the install's `apiUrl`, not a hardcoded URL.** Each install has its own back-office
@@ -223,7 +223,7 @@ import { withAppAuthentication } from "@/lib/with-app";
 
 export const GET = withAppAuthentication<PeekAccessService>(
   async (_request: NextRequest, peek: PeekAccessService) => {
-    const data = await peek.getAllActivities(); // SDK surface → peek-backoffice-api
+    const data = await peek.getProductService().getAllActivities(); // SDK surface → peek-backoffice-api
     return NextResponse.json({ data });
   },
 );
