@@ -5,8 +5,8 @@ import * as p from "@clack/prompts";
 import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
+import { ensureProjectLinked } from "../lib/link.js";
 import { detectPackageManager } from "../lib/pm.js";
-import { confirmDerivedAppId } from "../lib/project.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import { checkTestIdentifier } from "../lib/sync.js";
@@ -39,17 +39,13 @@ export default class Dev extends BaseCommand {
     }),
     cmd: Flags.string({
       description:
-        'Shell command that starts the app instead of "<pm> run dev" (e.g. "make serve"). It must listen on $PORT.',
+        'Shell command that starts the app instead of "./bin/server" or "<pm> run dev" (e.g. "make serve"). It must listen on $PORT.',
     }),
     domain: Flags.string({
       description:
         "Use a persistent named tunnel at <app>-dev.<domain> instead of an ephemeral quick tunnel. Requires a Cloudflare login and access to the domain's zone.",
     }),
-    yes: Flags.boolean({
-      char: "y",
-      description: "Skip the confirmation shown when this directory isn't linked to an app yet",
-      default: false,
-    }),
+    debug: Flags.boolean({ description: "Print request URLs and raw responses", default: false }),
   };
 
   async run(): Promise<void> {
@@ -69,12 +65,16 @@ export default class Dev extends BaseCommand {
         );
       }
 
-      // package.json is only needed for the default `<pm> run dev`. With --cmd the app may not
-      // be a Node project at all, which is the whole point of the flag.
-      if (!flags.cmd && !existsSync(join(cwd, "package.json"))) {
+      // Not a Node project, or started by something other than an npm script: an executable
+      // ./bin/server (the Rails/Phoenix/Go convention) is used before falling back to
+      // "<pm> run dev", and only then do we need package.json at all.
+      const binServer = join(cwd, "bin/server");
+      const command = flags.cmd ?? (existsSync(binServer) ? binServer : undefined);
+
+      if (!command && !existsSync(join(cwd, "package.json"))) {
         throw new CLIError(
-          "No package.json in the current directory.",
-          'Run this from inside the app, pass --cmd "<command>" if it isn\'t started by an npm script, or use `peek tunnel` if you start it yourself.',
+          "No package.json, no bin/server, and no --cmd in the current directory.",
+          'Run this from inside the app, add a `bin/server` executable, pass --cmd "<command>", or use `peek tunnel` if you start it yourself.',
         );
       }
 
@@ -84,14 +84,7 @@ export default class Dev extends BaseCommand {
       if (!flags["no-sync"]) {
         await ensureLoggedIn();
         await confirmRegistryOverride();
-        if (!(await confirmDerivedAppId(cwd, {
-          appFlag: flags.app,
-          yes: flags.yes,
-          manifestFile: appFile,
-        }))) {
-          p.cancel("Aborted.");
-          this.exit(1);
-        }
+        await ensureProjectLinked(cwd, { appFlag: flags.app, manifestFile: appFile, debug: flags.debug });
       }
 
       await serveWithTunnel({
@@ -103,7 +96,7 @@ export default class Dev extends BaseCommand {
         domain: flags.domain,
         appId: flags.app,
         testIdentifier: flags.test ? checkTestIdentifier(flags.test) : undefined,
-        command: flags.cmd,
+        command,
       });
     });
   }
