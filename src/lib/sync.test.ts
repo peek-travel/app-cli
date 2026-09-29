@@ -65,8 +65,18 @@ describe("createTestApp", () => {
 
     expect(lastRequest().body).toEqual({ identifier: "greg", base_url: undefined });
     // The registry derives the slug, so what comes back is what we report — never a guess.
-    expect(result.testAppId).toBe("waiver-wizard-test-greg");
-    expect(result.created).toBe(false);
+    expect(result?.testAppId).toBe("waiver-wizard-test-greg");
+    expect(result?.created).toBe(false);
+  });
+
+  it("returns null when the source app has no version to clone, instead of throwing", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(422, { errors: { detail: "Source app has no version to clone" } }),
+    );
+
+    const result = await createTestApp("waiver-wizard");
+
+    expect(result).toBeNull();
   });
 });
 

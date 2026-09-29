@@ -27,6 +27,10 @@ import { getAccessToken } from "./session.js";
 const { version: CLI_VERSION } = createRequire(import.meta.url)("../../package.json") as { version: string };
 const USER_AGENT = `peek-cli/${CLI_VERSION}`;
 const PROD_PUBLISH_ERROR = "Auto-publish is not allowed in production without allow-prod=true";
+// An app can exist in the registry (created in the portal, or registered by a prior CLI run)
+// with no version pushed to it yet — `test-apps` has nothing to clone in that case. The dev
+// loop treats this as tolerable rather than fatal: it's the signal to push a first draft.
+const NO_SOURCE_VERSION_ERROR = "Source app has no version to clone";
 
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
@@ -344,11 +348,15 @@ export function checkTestIdentifier(input: string): string {
 // `baseUrl` matters only on the run that creates it: a test app goes out PUBLISHED so it can
 // be installed straight away, and a published version whose extendable URLs are relative
 // needs its origin in the same breath. Later runs move it with setBaseUrl.
+//
+// Returns null — rather than throwing — when the source app exists but has no version at
+// all to clone (registered, never pushed to). That's the one case an "existing" source still
+// needs a first draft before a test app can exist; the caller pushes one and retries.
 export async function createTestApp(
   sourceAppId: string,
   options: { identifier?: string; baseUrl?: string; debug?: boolean } = {},
-): Promise<TestAppResult> {
-  const { body } = await request({
+): Promise<TestAppResult | null> {
+  const { status, body } = await request({
     method: "POST",
     path: `/apps/${encodeURIComponent(sourceAppId)}/test-apps`,
     body: {
@@ -356,7 +364,13 @@ export async function createTestApp(
       base_url: options.baseUrl,
     },
     debug: options.debug,
+    tolerate: 422,
   });
+
+  if (status === 422) {
+    if (detail(body) === NO_SOURCE_VERSION_ERROR) return null;
+    throw requestError(status, body);
+  }
 
   const result = upsertResult(body);
   if (!result.appId) {

@@ -6,6 +6,7 @@ import { BaseCommand } from "../../base-command.js";
 import { CLIError } from "../../errors.js";
 import { ensureLoggedIn } from "../../lib/auth.js";
 import { resolvePlatform, resolveStack } from "../../lib/axes.js";
+import { pickExistingApp } from "../../lib/link.js";
 import {
   emptyManifest,
   loadManifest,
@@ -18,13 +19,7 @@ import { PROJECT_FILE, readProject, writeLinkMetadata } from "../../lib/project.
 import { confirmRegistryOverride } from "../../lib/registry.js";
 import { STACK_VALUES } from "../../lib/stacks.js";
 import { composeSkills, writeEnvLocal } from "../../lib/scaffold.js";
-import {
-  announceSharedSecret,
-  findApp,
-  listApps,
-  tryExportManifest,
-  upsertManifest,
-} from "../../lib/sync.js";
+import { announceSharedSecret, findApp, tryExportManifest, upsertManifest } from "../../lib/sync.js";
 
 // `peek apps link` is `peek init` with the scaffolding taken out. It exists for the codebase
 // that already exists: an app written before the CLI did, or a checkout that has to push to
@@ -88,7 +83,7 @@ export default class Link extends BaseCommand {
     await ensureLoggedIn();
 
     await this.guard(async () => {
-      const appId = args["app-slug"] ?? (await this.pickApp(flags.debug));
+      const appId = args["app-slug"] ?? (await pickExistingApp(flags.debug));
 
       // Fail before writing anything: a slug that isn't in the registry (or isn't this
       // account's) would otherwise be recorded here and only blow up on the next `peek dev`.
@@ -192,37 +187,6 @@ export default class Link extends BaseCommand {
       spin.stop(`Couldn't create ${appId}`, 1);
       throw error;
     }
-  }
-
-  // No slug given: show what this account can publish to. There is no name in the
-  // publisher API — the slug IS the identifier a developer recognizes.
-  private async pickApp(debug: boolean): Promise<string> {
-    const apps = (await listApps({ excludeTestApps: true, debug })).sort((a, b) =>
-      a.appId.localeCompare(b.appId),
-    );
-
-    if (apps.length === 0) {
-      throw new CLIError(
-        "This account has no apps in the registry yet.",
-        "Run `peek init` to scaffold and create one.",
-      );
-    }
-
-    if (!process.stdin.isTTY) {
-      throw new CLIError("No app slug given.", "Pass the slug: `peek apps link <app-slug>`.");
-    }
-
-    const answer = await p.select({
-      message: "Which app does this directory publish to?",
-      options: apps.map((app) => ({ value: app.appId, label: app.appId })),
-    });
-
-    if (p.isCancel(answer)) {
-      p.cancel("Cancelled");
-      throw new CLIError("Aborted.");
-    }
-
-    return answer as string;
   }
 
   // Relinking is legitimate (an app renamed, a fork pointed at its own app) but it changes

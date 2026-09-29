@@ -183,10 +183,11 @@ otherwise lands much later: the registry won't clone a test app off a test app, 
   It's local-only — no auth, no network. Run it after upgrading the CLI to refresh the skills, or
   in a codebase that was never scaffolded.
 
-> **Never let `peek dev` invent an app.** In a directory with no `.peek-kit.json`, `dev` falls back
-> to a slug derived from `package.json` "name" and **creates that app** — which silently makes a
-> second app beside the one you meant. It warns and asks first (pass `-y` to accept, or `--app
-> <slug>`), but the right fix is `peek apps link` **before** the first `dev`.
+> **`dev`/`tunnel` never invent an app.** In a directory with no `.peek-kit.json` (and no legacy
+> manifest slug), they say so and prompt from the same list `apps link` would — pick one and it's
+> linked, then the run continues. Non-interactive, or nothing to pick from: they error, naming
+> `--app <slug>` or `peek apps link <slug> --create`. Neither command creates an app for you —
+> `apps link <slug> --create` (or `init`) is the one door for that.
 
 ### Registering without running
 
@@ -250,9 +251,9 @@ embedded app for real; a plain framework dev server can't (no host frame, no tok
 identity (it creates a separate **test app**, records it in `.peek-kit.json`, and writes
 `.env.local`) is a `manifest-and-deploy` concern.
 
-By default it starts the app with `<package manager> run dev`. A codebase whose dev server isn't an
-npm script takes `--cmd "<shell command>"`; whatever you pass **must listen on `$PORT`**, because
-that is the port the tunnel points at.
+By default it starts an executable `./bin/server` if one exists, else `<package manager> run dev`.
+A codebase whose dev server is neither takes `--cmd "<shell command>"`; whatever runs — detected or
+passed — **must listen on `$PORT`**, because that is the port the tunnel points at.
 
 ## 3b. Point an app at a real host — `apps use-url`
 

@@ -5,8 +5,8 @@ import * as p from "@clack/prompts";
 import { BaseCommand } from "../base-command.js";
 import { CLIError } from "../errors.js";
 import { ensureLoggedIn } from "../lib/auth.js";
+import { ensureProjectLinked } from "../lib/link.js";
 import { detectPackageManager } from "../lib/pm.js";
-import { confirmDerivedAppId } from "../lib/project.js";
 import { confirmRegistryOverride } from "../lib/registry.js";
 import { serveWithTunnel } from "../lib/serve.js";
 import { checkTestIdentifier } from "../lib/sync.js";
@@ -53,11 +53,7 @@ export default class Tunnel extends BaseCommand {
       description:
         "Use a persistent named tunnel at <app>-dev.<domain> instead of an ephemeral quick tunnel. Requires a Cloudflare login and access to the domain's zone.",
     }),
-    yes: Flags.boolean({
-      char: "y",
-      description: "Skip the confirmation shown when this directory isn't linked to an app yet",
-      default: false,
-    }),
+    debug: Flags.boolean({ description: "Print request URLs and raw responses", default: false }),
   };
 
   async run(): Promise<void> {
@@ -83,14 +79,7 @@ export default class Tunnel extends BaseCommand {
       if (!flags["no-sync"]) {
         await ensureLoggedIn();
         await confirmRegistryOverride();
-        if (!(await confirmDerivedAppId(cwd, {
-          appFlag: flags.app,
-          yes: flags.yes,
-          manifestFile: appFile,
-        }))) {
-          p.cancel("Aborted.");
-          this.exit(1);
-        }
+        await ensureProjectLinked(cwd, { appFlag: flags.app, manifestFile: appFile, debug: flags.debug });
       }
 
       await serveWithTunnel({

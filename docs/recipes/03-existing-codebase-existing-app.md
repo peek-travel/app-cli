@@ -49,10 +49,10 @@ peek tunnel --port 4000
 `peek tunnel` does the half only the CLI can do, and **starts nothing**:
 
 1. opens a Cloudflare tunnel to `:4000` (and warns if nothing's listening there yet)
-2. pushes `app.json` at `example-app` as a **draft** — production's live version is
-   untouched
-3. creates/reuses the test app `example-app-test-dev`, points it at the tunnel and
-   **publishes it**
+2. since `example-app` already exists (that's this recipe), leaves it alone entirely —
+   nothing is pushed at it
+3. creates/reuses the test app `example-app-test-dev`, pushes `app.json` at **it** directly,
+   points it at the tunnel and **publishes it**
 4. writes `PEEK_APP_URL` / `PEEK_APP_ID` / `PEEK_APP_SECRET` to `.env.local`
 5. holds the tunnel open until Ctrl-C, and prints the install links
 

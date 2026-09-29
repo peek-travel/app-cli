@@ -79,11 +79,13 @@ stay in agreement the whole way.
 
 | | What happens |
 | --- | --- |
-| `example-app` (your real app) | its **draft** is updated with whatever `app.json` says. Never published by `dev` — installed users see nothing change |
-| `example-app-test-dev` | created if new, pointed at your tunnel, **published** — this is what you install |
+| `example-app` (your real app) | left alone. `example-app` already exists (that's this recipe), so `dev` never writes to it — it only reads whatever draft/published manifest is already there to clone from |
+| `example-app-test-dev` | created if new, gets `app.json` pushed to it **every restart**, pointed at your tunnel, **published** — this is what you install |
 
-So editing `app.json` is safe to iterate on: it moves the prod app's draft, not its live version.
-Publishing is a separate, deliberate step:
+So editing `app.json` is safe to iterate on: every restart moves the *test* app, never the real
+one. (The one exception: an app that doesn't exist in the registry yet gets its first draft
+created this way — see recipe 01. Once it exists, `dev` never touches it again.) Publishing is a
+separate, deliberate step, done at the real app on purpose:
 
 ```bash
 peek apps push                                     # push + publish (asks first, loudly, for a

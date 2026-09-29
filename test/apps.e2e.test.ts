@@ -415,7 +415,7 @@ describe("test apps are not something you build on", () => {
     await writeFile(join(dir, "app.json"), JSON.stringify(MANIFEST));
 
     const { stdout, stderr } = await peek(
-      ["tunnel", "--app", "my-existing-app-test-dev", "--test", "greg", "--yes"],
+      ["tunnel", "--app", "my-existing-app-test-dev", "--test", "greg"],
       dir,
     ).catch((error: { stdout: string; stderr: string }) => error);
 
@@ -436,7 +436,7 @@ describe("test apps are not something you build on", () => {
       JSON.stringify({ data: { app: { id: "my-existing-app-test-dev", app_version: {} } } }),
     );
 
-    const { stdout, stderr } = await peek(["tunnel", "--yes"], dir).catch(
+    const { stdout, stderr } = await peek(["tunnel"], dir).catch(
       (error: { stdout: string; stderr: string }) => error,
     );
 

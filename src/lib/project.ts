@@ -224,7 +224,7 @@ export function targetAppId(
   return resolveAppId(cwd, { legacyAppId: legacySlug(options.manifestFile) }).appId;
 }
 
-function legacySlug(file?: string): string | undefined {
+export function legacySlug(file?: string): string | undefined {
   if (!file) return undefined;
   try {
     return loadManifest(file).legacyAppId;
@@ -233,42 +233,6 @@ function legacySlug(file?: string): string | undefined {
     // lookup's — fall through to the project file.
     return undefined;
   }
-}
-
-// A directory with no project file isn't necessarily a Peek app — it may be an existing
-// codebase someone ran `peek dev` / `peek tunnel` in. Left alone we'd derive a slug from
-// package.json and CREATE that app in the registry, which quietly makes a second app beside
-// the one they meant to develop against. Cheap to confirm, expensive to undo.
-//
-// Returns false when the developer declined, so the caller can stop before it opens a
-// tunnel or starts a server.
-export async function confirmDerivedAppId(
-  cwd: string,
-  options: { appFlag?: string; yes?: boolean; manifestFile?: string } = {},
-): Promise<boolean> {
-  if (options.appFlag) return true;
-  if (readProject(cwd).app?.id) return true;
-  // A legacy manifest carries the app's own slug at .data.app.id and outranks anything we
-  // could derive, so there is nothing being guessed here — warning about package.json
-  // would name an app this run isn't going to touch.
-  if (legacySlug(options.manifestFile)) return true;
-
-  // No package.json name to derive from: resolveAppId raises its own (good) error later.
-  const derived = packageSlug(cwd);
-  if (!derived) return true;
-
-  p.log.warn(
-    [
-      `This directory isn't linked to a registry app yet (no ${PROJECT_FILE}).`,
-      `Continuing will develop against "${derived}", taken from package.json — and create that app if nothing has the slug.`,
-      "To use an app that already exists instead, run `peek apps link` or pass --app <slug>.",
-    ].join("\n"),
-  );
-
-  if (options.yes || !process.stdin.isTTY) return true;
-
-  const answer = await p.confirm({ message: `Use "${derived}"?`, initialValue: false });
-  return !p.isCancel(answer) && answer === true;
 }
 
 // The generated test-app manifest the old dev loop kept beside app.json. It has no job

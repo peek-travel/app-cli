@@ -111,11 +111,13 @@ straight:
 | Installations API | `https://apps.peek.com/installations-api` (`PEEK_API_URL` default) | same — `https://apps.peek.com/installations-api` |
 | id + secret live in | the **host's** env, set by you at deploy | `.env.local`, written by `peek dev` |
 
-**What `npx @peektravel/app-cli dev` actually does** (so you know which app is live locally): it
-pushes `app.json` at your source app as an **unpublished draft** (creating the app on the first
-run), asks the registry for that app's **test app** (the same one every run — its slug is recorded
-in `.peek-kit.json`), pushes the **same manifest** at the test app, points the test app at the live
-tunnel URL, and publishes it. Then it **writes `.env.local` for you** — `PEEK_APP_ID` (test app),
+**What `npx @peektravel/app-cli dev` actually does** (so you know which app is live locally): the
+first time, when your source app doesn't exist in the registry yet, it pushes `app.json` at it as
+an **unpublished draft** to create it. On every run after that — the normal case, an already-
+registered app — it leaves the source app alone entirely: it asks the registry for that app's
+**test app** (the same one every run — its slug is recorded in `.peek-kit.json`), pushes the
+**same manifest** at the test app directly, points the test app at the live tunnel URL, and
+publishes it. Then it **writes `.env.local` for you** — `PEEK_APP_ID` (test app),
 `PEEK_APP_SECRET` (test app), `PEEK_APP_URL` (tunnel), and `PEEK_API_URL` (only when pointed at a
 non-production registry). Your source app is never published from here and never receives the
 tunnel URL. **So under `peek dev` the app embedded in the iframe is the TEST app — your env must be

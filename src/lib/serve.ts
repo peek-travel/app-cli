@@ -102,8 +102,12 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
   // app, so a directory pointed at one (by --app, or by a legacy manifest whose slug
   // happens to be a test app's) would fail at createTestApp below — after cloudflared is
   // up and the manifest has been pushed.
+  // Whether the source app already exists in the registry — checked once, here, and reused
+  // rather than re-asked: it's also what tells `publishTestApp` whether touching the source
+  // app at all is warranted (see the comment on that function).
+  let sourceExists = false;
   if (project) {
-    await assertSourceApp(project.appId);
+    sourceExists = await assertSourceApp(project.appId);
     // Satisfied: now record what we derived, which is what makes the answer stable for
     // every later command. A slug that came from a flag stays a flag — it's for one run.
     if (project.appIdSource === "manifest" || project.appIdSource === "package") {
@@ -148,6 +152,7 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
         baseUrl: tunnel.url,
         identifier: opts.testIdentifier,
         writeEnv: opts.writeEnv,
+        sourceExists,
       });
       published = result.version;
       appId = result.testAppId;
@@ -214,11 +219,14 @@ export async function serveWithTunnel(opts: ServeOptions): Promise<void> {
 // Refuse to run the dev loop against a test app. It is someone's (possibly this
 // developer's) environment, not an app to build on: the registry forbids nesting clones, so
 // there is no test app we could make for it.
-async function assertSourceApp(appId: string): Promise<void> {
-  // A slug nothing holds yet is the normal first run — this is the app we're about to
-  // create — so only an app that EXISTS and is a clone is a problem.
+//
+// Returns whether the source app already exists — a slug nothing holds yet is the normal
+// first run (the app we're about to create), so only an app that EXISTS and is a clone is a
+// problem here; existence itself is handed back rather than re-derived by the caller.
+async function assertSourceApp(appId: string): Promise<boolean> {
   const app = await findApp(appId);
-  if (!app?.isTestApp) return;
+  if (!app) return false;
+  if (!app.isTestApp) return true;
 
   const source = app.testAppFor;
   throw new CLIError(
@@ -240,13 +248,21 @@ interface PublishOptions {
   // Mirrors ServeOptions.writeEnv: false means the caller's env is none of our business,
   // so a freshly minted secret is printed rather than written.
   writeEnv?: boolean;
+  // Whether the source app already had a registry record before this run (from
+  // `assertSourceApp`). Skips step 1 when true — see the comment below.
+  sourceExists: boolean;
 }
 
-// The dev loop's registry half. Four writes, in this order, because each depends on the
-// last:
+// The dev loop's registry half. Up to four writes, because each depends on the last:
 //
-//   1. push the manifest at the SOURCE app as a draft — this is what creates the app the
-//      first time. It's left unpublished: no base_url, and a draft doesn't need one.
+//   1. push the manifest at the SOURCE app as a draft — but ONLY when it has no version to
+//      clone yet, whether that's a brand-new app or an existing registry row nothing was
+//      ever pushed to. Left unpublished: no base_url, and a draft doesn't need one. For an
+//      app that already has a version — the common case, an existing project pointed at a
+//      real (often production) app — this step is skipped entirely: `test-apps` below
+//      clones whatever the source already has, and step 3 pushes local edits onto the TEST
+//      app directly. There is no reason for `peek dev` to write to a real app's draft on
+//      every restart just to keep a clone in sync with itself.
 //   2. ask for its test app (idempotent — the same `<app>-test-dev` every run).
 //   3. push the SAME manifest at the test app, so manifest edits take effect on restart.
 //   4. point the test app at the tunnel, then publish it. base_url and the manifest write
@@ -258,25 +274,40 @@ interface PublishOptions {
 async function publishTestApp(
   opts: PublishOptions,
 ): Promise<{ testAppId: string; version: AppVersion }> {
-  p.log.step("Registering your app (draft)");
-  const source = await upsertManifest({
-    appId: opts.appId,
-    manifest: opts.manifest,
-    autoPublish: false,
-  });
-  if (source.action === "created") {
-    p.log.step(`Created ${opts.appId} in the registry`);
-  }
-  // The source app's secret is in the create response and nowhere else, ever again. The
-  // test app gets its own (saved to .env.local below), so this one isn't what the local run
-  // needs — it's what a PRODUCTION deploy of this app will need, so say it out loud now
-  // rather than let it vanish with the scrollback.
-  if (source.sharedSecret) announceSharedSecret(source.sharedSecret);
+  const pushSourceDraft = async (): Promise<void> => {
+    p.log.step("Registering your app (draft)");
+    const source = await upsertManifest({
+      appId: opts.appId,
+      manifest: opts.manifest,
+      autoPublish: false,
+    });
+    if (source.action === "created") {
+      p.log.step(`Created ${opts.appId} in the registry`);
+    }
+    // The source app's secret is in the create response and nowhere else, ever again. The
+    // test app gets its own (saved to .env.local below), so this one isn't what the local run
+    // needs — it's what a PRODUCTION deploy of this app will need, so say it out loud now
+    // rather than let it vanish with the scrollback.
+    if (source.sharedSecret) announceSharedSecret(source.sharedSecret);
+  };
 
-  const test = await createTestApp(opts.appId, {
+  if (!opts.sourceExists) await pushSourceDraft();
+
+  let test = await createTestApp(opts.appId, {
     identifier: opts.identifier,
     baseUrl: opts.baseUrl,
   });
+
+  // `sourceExists` only means the app row is there — not that it has a version. An app
+  // registered (in the portal, or by a CLI run that stopped short) but never pushed to has
+  // nothing for `test-apps` to clone; push the first draft now and retry once.
+  if (!test) {
+    await pushSourceDraft();
+    test = await createTestApp(opts.appId, { identifier: opts.identifier, baseUrl: opts.baseUrl });
+    if (!test) {
+      throw new CLIError(`${opts.appId} still has no version to clone after pushing a draft.`);
+    }
+  }
   // Always name it, not just on the run that created it: with `--test <identifier>` there
   // is more than one test app this could be, and the developer needs to know which one
   // they're about to install.
