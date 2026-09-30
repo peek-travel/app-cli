@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,6 +42,12 @@ const TEMPLATE_COPY_IGNORE = new Set(["node_modules", ".next", ".git"]);
 // real .gitignore — only the 2-line .env.local fallback ensureEnvLocalIgnored writes.
 const TEMPLATE_GITIGNORE = "gitignore";
 
+// Scripts the scaffolded app must be able to run directly (`./bin/server`). Git tracks these
+// as 100755, but npm pack/publish has been observed to ship them without the exec bit — so
+// the mode `cp` faithfully carries over from an installed package can already be broken.
+// Forced explicitly here rather than trusted from the source file's mode.
+const TEMPLATE_EXECUTABLES = ["bin/server"];
+
 // Copies the starter kit from the local filesystem into the new app dir. The source is
 // always the kit vendored into the CLI — nothing is downloaded at scaffold time.
 export async function fetchTemplate(source: string, targetDir: string): Promise<void> {
@@ -63,6 +69,13 @@ export async function fetchTemplate(source: string, targetDir: string): Promise<
   const shipped = join(targetDir, TEMPLATE_GITIGNORE);
   if (existsSync(shipped)) {
     await rename(shipped, join(targetDir, ".gitignore"));
+  }
+
+  for (const relPath of TEMPLATE_EXECUTABLES) {
+    const path = join(targetDir, relPath);
+    if (existsSync(path)) {
+      await chmod(path, 0o755);
+    }
   }
 }
 
