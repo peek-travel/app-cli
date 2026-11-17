@@ -200,9 +200,10 @@ Phase 0 has no database, so there's nothing to scope yet. **When you add persist
 **Build the client from `apiUrl`.** To act on an install, construct its `PeekAccessService` from the
 persisted **`apiUrl`** — pass it as the config's `apiUrl` (used *as given*), or hand the whole record
 to **`createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret, issuer })`** which
-wires it. The config's **`baseUrl`/`appId`/`mode` are deprecated** (they rebuild the URL from a
-hardcoded gateway default that can't be right for every install); `apiUrl` takes precedence, and the
-**hardcoded fallback will be removed — a URL will become required**, so source it from the webhook now.
+wires it. The config's legacy **`baseUrl`/`appId` are deprecated** (they rebuild the URL from a
+hardcoded gateway default that can't be right for every install); `apiUrl` takes precedence. **Under
+`mode: "v2"` an `apiUrl` is now required — the constructor throws without it**, so source it from the
+webhook now.
 
 **These identity fields always arrive on the install delivery and are never null — model them as
 non-nullable columns** (`installId`, `accountId`, `accountName`, `platform`, `isTest`). `apiUrl` and

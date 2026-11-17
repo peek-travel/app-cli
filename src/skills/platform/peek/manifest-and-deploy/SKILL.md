@@ -138,8 +138,8 @@ that test app's env.**
 
 > **`PEEK_APP_ID` is in the back-office gateway *path*, but nothing verifies it — so a wrong id
 > passes every auth check and only fails at the back-office.** `PeekAccessService` builds the
-> gateway URL as `{PEEK_API_URL}/{PEEK_APP_ID}/peek_backoffice_api-v1/sales` (the id is the
-> `gatewayKey`; see `peek-embed-and-auth`). But `verifyPeekAuthToken` **and** the webhook validate
+> gateway URL as `{PEEK_API_URL}/{PEEK_APP_ID}/peek_backoffice_api-v1/sales` (the id is the app slug
+> in the `apiUrl` path; see `peek-embed-and-auth`). But `verifyPeekAuthToken` **and** the webhook validate
 > only the **secret** (`PEEK_APP_SECRET`) — never the id. So a wrong `PEEK_APP_ID` **passes the
 > token check *and* the webhook check**, then **404s the back-office** because the gateway path
 > points at a nonexistent app. Symptom: auth looks fine, back-office calls 404. If a wrong secret

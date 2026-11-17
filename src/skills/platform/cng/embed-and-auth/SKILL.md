@@ -95,8 +95,7 @@ export function createCngService(auth: PeekAuthTokenClaims): CngAccessService {
     installId: auth.installId,      // ← the entire user-token contribution
     jwtSecret: env.PEEK_APP_SECRET, // ← everything else is your app's own secret/config
     issuer: env.PEEK_APP_ID,
-    appId: env.PEEK_APP_ID,
-    baseUrl: env.PEEK_API_URL,
+    apiUrl: appApiUrl(env),         // the install's endpoint (`<registry-prefix>/<app-slug>`); swap in the webhook's api.url once persisted
   });
 }
 ```
@@ -144,10 +143,11 @@ export function createCngServiceForInstall(installId: string, apiUrl: string): C
 ```
 
 Or use the SDK factory: `createAccessServiceForInstall({ platform, apiUrl, installId }, { jwtSecret,
-issuer })`. **Use the install's own `apiUrl`, not a hardcoded endpoint** — the config's
-`baseUrl`/`appId`/`mode` are **deprecated** and the hardcoded fallback will be removed (see
-`cng-backoffice-api`). *(Until this starter has a DB it falls back to the app-level `PEEK_API_URL`;
-wire the per-install `apiUrl` in once you persist installs.)*
+issuer })`. **Use the install's own `apiUrl`, not a hardcoded endpoint** — the legacy
+`baseUrl`/`appId` config fields are **deprecated** and the hardcoded fallback will be removed (see
+`cng-backoffice-api`). *(Until this starter has a DB, `appApiUrl(env)` — from `lib/peek-service.ts`
+— stands in with the app-level `PEEK_API_URL` prefix plus the app slug; wire the per-install
+`apiUrl` in once you persist installs.)*
 
 **Guardrail:** `installId`/`apiUrl` must come from a trusted server-side source (your DB, a verified
 webhook — see `cng-webhooks`), **never** from a query param or request body a caller can forge.
