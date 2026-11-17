@@ -187,11 +187,12 @@ await installs.upsert(event.installId, {                       // full-snapshot 
 const svc = createAccessServiceForInstall(await installs.get(id), { jwtSecret, issuer });
 ```
 
-> **Source the endpoint from `apiUrl`, not `baseUrl`/`appId`.** The access-service config's
-> `baseUrl`/`appId`/`mode` are **deprecated** — they reconstruct the URL from a **hardcoded gateway
+> **Source the endpoint from `apiUrl`, not `baseUrl`/`appId`.** The access-service config's legacy
+> `baseUrl`/`appId` fields are **deprecated** — they reconstruct the URL from a **hardcoded gateway
 > default** that can't be right for every install. `apiUrl` (the install webhook's `api.url`) takes
-> precedence and is used *as given*. **The hardcoded fallbacks will be removed and a URL will become
-> required**, so persist and pass `apiUrl` now.
+> precedence and is used *as given*. **For Peek `mode: "v2"` an `apiUrl` is now required — the
+> constructor throws without it** (no `gatewayKey` needed under v2); the hardcoded `baseUrl` fallback
+> will be removed for the other platforms too, so persist and pass `apiUrl` now.
 
 Beyond `accountId`/`installId`, still **mint your own `installDataId`** (an install-time marker) to
 scope an install's working data so a fresh reinstall wipes cleanly — but **mint a new one only on a

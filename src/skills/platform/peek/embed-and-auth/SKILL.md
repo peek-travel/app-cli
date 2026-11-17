@@ -132,9 +132,7 @@ export function createPeekService(auth: PeekAuthTokenClaims): PeekAccessService 
     installId: auth.installId,      // ← the entire user-token contribution
     jwtSecret: env.PEEK_APP_SECRET, // ← everything else is your app's own secret/config
     issuer: env.PEEK_APP_ID,
-    appId: env.PEEK_APP_ID,
-    gatewayKey: env.PEEK_APP_ID,
-    baseUrl: env.PEEK_API_URL,
+    apiUrl: appApiUrl(env),         // `<registry-prefix>/<app-slug>`; v2 REQUIRES it (throws otherwise)
     mode: "v2",
   });
 }
@@ -161,7 +159,7 @@ export function createPeekServiceForInstall(installId: string, apiUrl: string): 
     apiUrl,                       // the install's OWN endpoint (from the webhook, persisted) — used as given
     jwtSecret: env.PEEK_APP_SECRET,
     issuer: env.PEEK_APP_ID,
-    gatewayKey: env.PEEK_APP_ID,
+    mode: "v2",                   // required; v2 authenticates on the JWT alone (no gatewayKey)
   });
 }
 ```
@@ -180,9 +178,12 @@ const activities = await peek.getProductService().getAllActivities();
 **Endpoint = the install's `apiUrl`, not a hardcoded URL.** Each install has its own back-office
 endpoint; source it from the persisted install (the webhook's `apiUrl`), for **both** this
 server-to-host path **and** the embed pipeline's `createPeekService(auth)` — look the install's
-`apiUrl` up by `auth.installId`. The config's `baseUrl`/`appId`/`mode` are **deprecated** (a hardcoded
-gateway default) and will be removed. *(Until this starter has a DB it falls back to the app-level
-`PEEK_API_URL`; wire the per-install `apiUrl` in once you persist installs.)*
+`apiUrl` up by `auth.installId`. For `mode: "v2"` the config's **`apiUrl` is required — the
+constructor throws without it** (no `gatewayKey` is needed; the legacy `baseUrl`/`appId` fields are
+deprecated and ignored under v2). *(Until this starter has a DB, `appApiUrl(env)` — defined in
+`lib/peek-service.ts` — stands in with the app-level `PEEK_API_URL` prefix plus the app slug
+(`<registry-prefix>/<app-slug>`), the shape the webhook's `api.url` also takes; wire the per-install
+`apiUrl` in once you persist installs.)*
 
 **Guardrails.** This bypasses user-identity checks by design, so `installId`/`apiUrl` must come from a
 trusted server-side source (your DB, a verified webhook), **never** from a query param or request

@@ -156,8 +156,8 @@ Phase 0 ships no database. **When you add persistence:**
   `update_installed` upserts the record but **keeps the existing `installDataId`**. On uninstall, flip
   the flag off and mark the old data for wipe. Key on `accountId`, since `installId` may change.
 - **Build the client from `apiUrl`.** Construct `AcmeAccessService` with the persisted `apiUrl`, or use
-  **`createAccessServiceForInstall({ platform, apiUrl, installId }, config)`**. The config's
-  `baseUrl`/`appId`/`mode` are **deprecated** (hardcoded gateway default) and will be removed —
+  **`createAccessServiceForInstall({ platform, apiUrl, installId }, config)`**. The config's legacy
+  `baseUrl`/`appId` fields are **deprecated** (hardcoded gateway default) and will be removed —
   source the URL from the webhook's `apiUrl`.
 - **These identity fields always arrive and are never null — model them as non-nullable columns**
   (`installId`, `accountId`, `accountName`, `platform`, `isTest`); `apiUrl`/`timezone` may be `""` on a
